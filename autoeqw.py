@@ -48,25 +48,18 @@ with open(INFN) as f:
         if line[0] == 'C': # Printed Comment
             testLines.append(line[2:])
             continue
-        tokens = line.split()
-        if not tokens: # Empty Line
+        if line.strip() == '': # Empty Line
             continue
-        if len(tokens) < 11 or len(tokens) > 12:
-            raise InvalidInput('\nLine {0:d}: {1}'.format(lineNo,line))
         try:
-            if len(tokens) == 11:
-                allLines.append(INLIN(line))
-            else:
-                allLines.append(INLIN(' '.join(tokens[:-1])))
+            inline = INLIN(line)
+            allLines.append(inline)
+            if inline.remainder:
                 tempTL.append(allLines[-1])
-                if float(tokens[-1]) != 0:
-                    testLines.append( (tempTL,float(tokens[-1])) )
+                if float(inline.remainder) != 0:
+                    testLines.append( (tempTL,float(inline.remainder)) )
                     tempTL = []
-        except InvalidInput as e:
-            print e
-            raise InvalidInput('\nLine {0:d}: {1}'.format(lineNo,line))
         except Exception:
-            print "Error while processing line {0:d}\n{1}".format(lineNo,line)
+            print "Error while processing line {0:d}\n{1}\n".format(lineNo,line)
             raise
 
 INCONSISTENT = False

@@ -16,23 +16,23 @@ class INLIN:
     ALAM, Z, Q, GF, EXCL, QL, EXCU, QU, GS, GW, INEXT = 0., 1, 0, 0.,  0., 0., 0., 0.,  0., 0., 0.,
     def __init__(self, INLINstr):
         try:
-            tokens = INLINstr.split()
-            self.ALAM = float(tokens[0])
-            ANUM = tokens[1].split('.')
-            self.Z, self.Q = int(ANUM[0]), int(ANUM[1])
-            self.GF = float(tokens[2])
-            self.EXCL = float(tokens[3])
-            self.QL = float(tokens[4])
-            self.EXCU = float(tokens[5])
-            self.QU = float(tokens[6])
-            self.GS = float(tokens[7])
-            self.GW = float(tokens[8])
-            self.INEXT = float(tokens[9])
+            line = ''.join([' '] * (10 - len(INLINstr.split()[0])) + [INLINstr.lstrip()])
+            self.ALAM = float(line[0:10])
+            self.Z, self.Q = int(line[11:13]), int(line[14:16])
+            self.GF = float(line[16:23])
+            self.EXCL = float(line[23:35])
+            self.QL = float(line[35:39])
+            self.EXCU = float(line[39:51])
+            self.QU = float(line[51:55])
+            self.GS = float(line[55:63])
+            self.GW = float(line[63:70])
+            self.INEXT = float(line[70:77])
+            self.remainder = line[79:]
         except Exception as e:
             print e
             raise InvalidInput(INLINstr)
     def __str__(self):
-        return '{0:.4f} {1:2d}.{2:0>2d}  {3:.3f}  {4:.3f} {5:.1f}  {6:.3f} {7:.1f}    {8:.2f}  {9:.2f}  {10:.2f} 0\n'.format(self.ALAM, self.Z, self.Q, self.GF, self.EXCL, self.QL, self.EXCU, self.QU, self.GS, self.GW, self.INEXT)
+        return '{0:>10.4f}{1:>3d}.{2:0>2d}{3:>7.3f}{4:>12.3f}{5:>4.1f}{6:>12.3f}{7:>4.1f} {8:>7.2f}{9:>7.2f}{10:>7.2f} 0'.format(self.ALAM, self.Z, self.Q, self.GF, self.EXCL, self.QL, self.EXCU, self.QU, self.GS, self.GW, self.INEXT)
     def __cmp__(self,other):
         return self.ALAM - other.ALAM
         
@@ -84,6 +84,7 @@ class ISynspec:
         with open('fort.19','w') as f:
             for line in self.LINELIST:
                 f.write(str(line))
+                f.write('\n')
     def write56(self):
         with open('fort.56','w') as f:
             f.write('{0:d}\n'.format(len(self.ABUNDANCES)))
