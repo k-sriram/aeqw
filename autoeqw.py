@@ -15,6 +15,7 @@ INFN = 'aeqw.in'
 OUTFN = 'aeqw.out'
 INITABUN = 1e-4
 NULLABUN = 1e-10
+BROAD = 2.0
 RANGE = 5.0
 EPSILON = 0.1
 IS = ISynspec()
@@ -36,11 +37,10 @@ with open(INFN) as f:
 # The first line has the format:
 # modelFN INLTE SPACE VTB BROAD LOGHE
     IS.modelFN = tokens[0]
-    IS.INLTE = int(tokens[1])
-    IS.SPACE = float(tokens[2])
-    IS.VTB = float(tokens[3])
-    BROAD = float(tokens[4])
-    LOGHE = float(tokens[5])
+    LOGHE = float(tokens[1])
+    BROAD = float(tokens[2])
+    RANGE = float(tokens[3])
+    EPSILON = float(tokens[4])
     for line in f:
         lineNo += 1
         if line[0] == '#': # Unprinted Comment
@@ -65,9 +65,9 @@ with open(INFN) as f:
 INCONSISTENT = False
 if not IS.TestTG():
     print ''
-    print("         *************************** ERROR ***************************")
+    print("         ************************** WARNING **************************")
     print("         *Discrepancy between fort.8 and model temperature / gravity.*")
-    print("         *************************** ERROR ***************************")
+    print("         ************************** WARNING **************************")
     print ''
     INCONSISTENT = True
 allLines.sort()
