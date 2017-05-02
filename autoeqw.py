@@ -87,7 +87,7 @@ def Overlap(bin,box):
     r = min(bin[1],box[1])
     if l > r:
         return 0.
-    return (r-l)/(bin[1] - bin[0])
+    return math.sqrt((r-l)/(bin[1] - bin[0]))
 
 
 # Calculate the Equivalent width of a particular line
