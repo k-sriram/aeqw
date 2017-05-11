@@ -53,7 +53,7 @@ with open(INFN) as f:
         try:
             inline = INLIN(line)
             allLines.append(inline)
-            if inline.remainder:
+            if inline.remainder.strip():
                 tempTL.append(allLines[-1])
                 if float(inline.remainder) != 0:
                     testLines.append( (tempTL,float(inline.remainder)) )
