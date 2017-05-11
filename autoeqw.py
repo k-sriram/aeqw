@@ -93,6 +93,8 @@ def Overlap(bin,box):
 # Calculate the Equivalent width of a particular line
 def CalcEqw(testLine):
     global IS
+    if len(IS.EQW) < 2:
+        return None
     box = ( min(testLine).ALAM * 10 - BROAD, max(testLine).ALAM * 10 + BROAD )
     total = 0
     for bin in IS.EQW:
@@ -117,11 +119,18 @@ for tl in testLines:
     Z = testLine[0].Z
     print 'Calculating for following lines with target equivalent width:', xeqw
     for t in testLine:
-        print str(t)[:-1]
+        print str(t)
     InitParam(testLine, allLines)
     # Setting Zero
-    Run([(Z,NULLABUN)])
+    abun = NULLABUN
+    Run([(Z,abun)])
     zero = CalcEqw(testLine)
+    while zero is None:     # If the program didn't compute the bins
+        global IS
+        IS.RELOP /= 10
+        IS.write55()
+        Run([(Z,abun)])
+        zero = CalcEqw(testLine)
 
     # Finding the abundance that gives reasonable eqw
     trials = [INITABUN]
@@ -129,7 +138,7 @@ for tl in testLines:
     while not results or abs(results[-1] - xeqw) > EPSILON:
         Run([(Z,trials[-1])])
         results.append(CalcEqw(testLine) - zero)
-        if results[-1] == 0:
+        if results[-1] is None or results[-1] == 0:
             if trials[-1] < .1:
                 trials.append(trials[-1] * 10)
                 continue
