@@ -5,6 +5,9 @@
 # Created: 20/04/2017
 
 from subprocess import call
+import logging
+
+logger = logging.getLogger('aeqw.iSynspec')
 
 class InvalidInput(Exception):
     def __init__(self,line):
@@ -29,7 +32,9 @@ class INLIN:
             self.GW = float(line[70:77])
             self.remainder = line[79:]
         except Exception as e:
-            print e
+            logger.error("Error parsing spectral line: ")
+            logger.error(INLINstr)
+            logger.error(e)
             raise InvalidInput(INLINstr)
     def __str__(self):
         return '{0:>10.4f}{1:>3d}.{2:0>2d}{3:>7.3f}{4:>12.3f}{5:>4.1f}{6:>12.3f}{7:>4.1f} {8:>7.2f}{9:>7.2f}{10:>7.2f} 0'.format(self.ALAM, self.Z, self.Q, self.GF, self.EXCL, self.QL, self.EXCU, self.QU, self.AGAM, self.GS, self.GW)
@@ -67,6 +72,7 @@ class ISynspec:
         self.read55()
     # Test if the Temperature and Gravity are same in both the model and concentration file
     def TestTG(self):
+        logger.debug("Checking to see if T and log g are consistent between files.")
         with open('fort.8') as f:
             tokens = f.readline().split()
             self.TEMP = float(tokens[2])
@@ -79,20 +85,24 @@ class ISynspec:
 
     # Methods to write to input files.
     def write55(self):
+        logger.debug("Writing to fort.55")
         with open('fort.55','w') as f:
             f.write(self.temp55.format(self.IMODE,self.IDSTD,self.IPRIN,self.INMOD,self.INTRPL,self.ICHANG,self.ICHEMC,self.IOPHLI,self.IFREQ,self.INLTE,self.ICONTL,self.INLIST,self.IFHE2,self.IHYDPR,self.IHE1PR,self.IHE2PR,self.ALAM0,self.ALAM1,self.CUTOF0,self.CUTOFS,self.RELOP,self.SPACE,self.VTB))
     def write19(self):
+        logger.debug("Writing to fort.19")
         with open('fort.19','w') as f:
             for line in self.LINELIST:
                 f.write(str(line))
                 f.write('\n')
     def write56(self):
+        logger.debug("Writing to fort.56")
         with open('fort.56','w') as f:
             f.write('{0:d}\n'.format(len(self.ABUNDANCES)))
             for ABUN in self.ABUNDANCES:
                 f.write('{0:d} {1:e}\n'.format(ABUN[0],ABUN[1]).replace('e',''))
     # Methods to read from output file.
     def read16(self):
+        logger.debug("Reading from fort.16")
         self.EQW = []
         with open('fort.16') as f:
             for line in f:
@@ -101,6 +111,7 @@ class ISynspec:
         return self.EQW
     # Reading fort.55 for values of all parameter.
     def read55(self):
+        logger.debug("Reading from fort.55")
         with open('fort.55') as f:
             # Line 1
             self.IMODE, self.IDSTD, self.IPRIN = [int(i) for i in f.readline().split()]
@@ -119,6 +130,7 @@ class ISynspec:
             self.VTB = float(f.readline().strip())
     # Running the SYNSPEC program. self.runs is a counter that keeps track of number of runs.
     def run(self):
+        logger.debug("Running SYNSPEC")
         self.runs += 1
         with open(self.modelFN) as inp:
             out = open('/dev/null','w')
