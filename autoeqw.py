@@ -24,13 +24,14 @@ logger.addHandler(filelog)
 filelog.doRollover()
 
 logger.debug('Running program: Automatic Equation width solver.')
+logger.debug('Initialization')
 
 INFN = 'aeqw.in'
 OUTFN = 'aeqw.out'
 INITABUN = 1e-4
 NULLABUN = 1e-10
 
-logger.debug('Parameters: INFN: {0:s}, OUTFN, {1:s}, INITABUN: {2:.1e}, NULLABUN: {3:.1e}'.format(INFN,OUTFN,INITABUN,NULLABUN))
+logger.debug(' Parameters: INFN: {0:s}, OUTFN, {1:s}, INITABUN: {2:.1e}, NULLABUN: {3:.1e}'.format(INFN,OUTFN,INITABUN,NULLABUN))
 
 BROAD = 2.0
 RANGE = 5.0
@@ -59,10 +60,10 @@ with open(INFN) as f:
     BROAD = float(tokens[2])
     RANGE = float(tokens[3])
     EPSILON = float(tokens[4])
-    logger.debug('Parameters from input file: Model filename: {0}'.format(IS.modelFN))
-    logger.debug('> LOG[He]: {0:f}, BROAD: {1:f}, RANGE: {2:f}, EPSILON: {3:e}'.format(LOGHE,BROAD,RANGE,EPSILON))
+    logger.debug(' Parameters from input file: Model filename: {0}'.format(IS.modelFN))
+    logger.debug(' > LOG[He]: {0:f}, BROAD: {1:f}, RANGE: {2:f}, EPSILON: {3:e}'.format(LOGHE,BROAD,RANGE,EPSILON))
     for line in f:
-        logger.debug('Processing line: {0}'.format(line.strip()))
+        logger.debug(' Processing line: {0}'.format(line.strip()))
         lineNo += 1
         if line[0] == '#': # Unprinted Comment
             continue
@@ -96,7 +97,7 @@ def InitParam(testLine, allLines):
     global IS
     IS.ALAM0 = min(testLine).ALAM * 10 - RANGE
     IS.ALAM1 = max(testLine).ALAM * 10 + RANGE
-    logger.debug("InitParam: Setting range of synthetic spectrum: ({0:.1f}, {1:.1f})".format(IS.ALAM0,IS.ALAM1))
+    logger.debug(" InitParam: Setting range of synthetic spectrum: ({0:.1f}, {1:.1f})".format(IS.ALAM0,IS.ALAM1))
     
     IS.write55()
     
@@ -112,26 +113,28 @@ def Overlap(bin,box):
 def CalcEqw(testLine):
     global IS
     if len(IS.EQW) < 2:
-        logger.debug("CalcEqw: SYNSPEC did not generate output in fort.16")
+        logger.warning("  CalcEqw: SYNSPEC did not generate output in fort.16")
         return None
     box = ( min(testLine).ALAM * 10 - BROAD, max(testLine).ALAM * 10 + BROAD )
-    logger.debug("CalcEqw: Calculating Equivalent width; including bins in {0}.".format(str(box)))
+    logger.debug("  CalcEqw: Calculating Equivalent width; including bins in {0}.".format(str(box)))
     total = 0
     for bin in IS.EQW:
         total += bin[1] * Overlap(bin[0],box)
-    logger.debug("CalcEqw: eqw = {0:f}".format(total))
+    logger.debug("  CalcEqw: eqw = {0:f}".format(total))
     return total
 
 # Set the abundance and run SYNSPEC and read the output
 def Run(abundances):
     global IS
-    logger.debug("Setting abundance: {0}".format(str(abundances)))
+    logger.debug("  Setting abundance: {0}".format(str(abundances)))
     IS.ABUNDANCES = abundances
     IS.write56()
     IS.run()
     IS.read16()
 finAbun = [] 
 # Iterating over all testLines
+logger.debug("Estimating abundance for all lines.")
+
 for tl in testLines:
     if type(tl) == str:
         finAbun.append('')
@@ -144,23 +147,23 @@ for tl in testLines:
         logger.info(str(t))
     InitParam(testLine, allLines)
     # Setting Zero
-    logger.debug("Performing zero check")
+    logger.debug(" Performing zero check")
     abun = NULLABUN
     Run([(Z,abun)])
     zero = CalcEqw(testLine)
     while zero is None:     # If the program didn't compute the bins
         IS.RELOP /= 10
-        logger.debug("> Setting RELOP parameter to {0:.1e}".format(IS.RELOP))
+        logger.debug(" > Setting RELOP parameter to {0:.1e}".format(IS.RELOP))
         IS.write55()
         Run([(Z,abun)])
         zero = CalcEqw(testLine)
-    logger.debug("> Zero = {0:f}".format(zero))
+    logger.debug(" > Zero = {0:f}".format(zero))
 
     # Finding the abundance that gives reasonable eqw
     trials = [INITABUN]
     results = []
     while not results or abs(results[-1] - xeqw) > EPSILON:
-        logger.debug("Running for abundance: {0:e}, target width: {1:f}".format(trials[-1],xeqw))
+        logger.debug(" Running for abundance: {0:e}, target width: {1:f}".format(trials[-1],xeqw))
         Run([(Z,trials[-1])])
         results.append(CalcEqw(testLine) - zero)
         if results[-1] is None or results[-1] == 0:
@@ -180,9 +183,9 @@ for tl in testLines:
                 finAbun.append('Emmision/Absorption mismatch')
             break
         else:
-            logger.debug("Guess = {0:e}, Result = {1:f}, Target = {2:f}, Diff = {3:f}, Epsilon = {4:f}".format(trials[-1],results[-1],xeqw,xeqw-results[-1],EPSILON))
+            logger.debug("  Guess = {0:e}, Result = {1:f}, Target = {2:f}, Diff = {3:f}, Epsilon = {4:f}".format(trials[-1],results[-1],xeqw,xeqw-results[-1],EPSILON))
             trials.append(xeqw * trials[-1] / results[-1])
-            logger.debug("Using linear approximation for new guess: {0:e}".format(trials[-1]))
+            logger.debug(" Using linear approximation for new guess: {0:e}".format(trials[-1]))
     else:
         finAbun.append('{0:0.2e} {1:.2f}'.format(trials[-1], math.log(trials[-1],10) + LOGHE))
     logger.info('Result: %s', finAbun[-1])
