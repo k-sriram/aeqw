@@ -9,6 +9,9 @@ import logging
 
 logger = logging.getLogger('aeqw.iSynspec')
 
+def fortfloat(x):
+    return float(x.replace('-','e-').replace('+','e+'))
+
 class InvalidInput(Exception):
     def __init__(self,line):
         self.msg = line
@@ -87,7 +90,7 @@ class ISynspec:
     def write55(self):
         logger.debug("   Writing to fort.55")
         with open('fort.55','w') as f:
-            f.write(self.temp55.format(self.IMODE,self.IDSTD,self.IPRIN,self.INMOD,self.INTRPL,self.ICHANG,self.ICHEMC,self.IOPHLI,self.IFREQ,self.INLTE,self.ICONTL,self.INLIST,self.IFHE2,self.IHYDPR,self.IHE1PR,self.IHE2PR,self.ALAM0,self.ALAM1,self.CUTOF0,self.CUTOFS,self.RELOP,self.SPACE,self.VTB))
+            f.write(self.temp55.format(self.IMODE,self.IDSTD,self.IPRIN,self.INMOD,self.INTRPL,self.ICHANG,self.ICHEMC,self.IOPHLI,self.IFREQ,self.INLTE,self.ICONTL,self.INLIST,self.IFHE2,self.IHYDPR,self.IHE1PR,self.IHE2PR,self.ALAM0,self.ALAM1,self.CUTOF0,self.CUTOFS,self.RELOP,self.SPACE,self.VTB).replace('e',''))
     def write19(self):
         logger.debug("   Writing to fort.19")
         with open('fort.19','w') as f:
@@ -125,9 +128,21 @@ class ISynspec:
             self.IHYDPR, self.IHE1PR, self.IHE2PR = [int(i) for i in f.readline().split()]
             # Line 6
             tokens = f.readline().split()
-            self.CUTOF0, self.RELOP, self.SPACE = int(tokens[2]), float(tokens[4]), float(tokens[5])
+            self.CUTOF0, self.RELOP, self.SPACE = int(tokens[2]), fortfloat(tokens[4]), float(tokens[5])
             # Line 7
             self.VTB = float(f.readline().strip())
+    # Reading fort.56, this can be used to set the initial abundances or checking.
+    def read56(self):
+        logger.debug("    Reading from fort.56")
+        with open('fort.56') as f:
+            self. ABUNDANCES = []
+            lines = int(f.readline().strip())
+            for i in range(lines):
+                line = f.readline()
+                tokens = line.split()
+                self.ABUNDANCES.append((int(tokens[0]),fortfloat(tokens[1])))
+
+
     # Running the SYNSPEC program. self.runs is a counter that keeps track of number of runs.
     def run(self):
         logger.debug("   Running SYNSPEC")

@@ -38,6 +38,10 @@ RANGE = 5.0
 EPSILON = 0.1
 IS = ISynspec()
 
+INITABUNZWISE = {}
+IS.read56()
+for  i in IS.ABUNDANCES:
+    INITABUNZWISE[i[0]] = i[1]
 
 allLines = [] # allLines stores the information of all the lines that are going to be used
 # testLines stores which all lines have to be tested. It is a list. Each
@@ -107,7 +111,10 @@ def Overlap(bin,box):
     if l > r:
         return 0.
     return math.sqrt((r-l)/(bin[1] - bin[0]))
-
+def Secant(x,f,y):
+    if abs(f[-1] - f[-2]) < EPSILON:
+        return -1
+    return (x[-2]*(f[-1]-y) - x[-1]*(f[-2]-y))/(f[-1]-f[-2])
 
 # Calculate the Equivalent width of a particular line
 def CalcEqw(testLine):
@@ -160,7 +167,7 @@ for tl in testLines:
     logger.debug(" > Zero = {0:f}".format(zero))
 
     # Finding the abundance that gives reasonable eqw
-    trials = [INITABUN]
+    trials = [INITABUNZWISE.get(Z,INITABUN)]
     results = []
     while not results or abs(results[-1] - xeqw) > EPSILON:
         logger.debug(" Running for abundance: {0:e}, target width: {1:f}".format(trials[-1],xeqw))
@@ -184,8 +191,16 @@ for tl in testLines:
             break
         else:
             logger.debug("  Guess = {0:e}, Result = {1:f}, Target = {2:f}, Diff = {3:f}, Epsilon = {4:f}".format(trials[-1],results[-1],xeqw,xeqw-results[-1],EPSILON))
-            trials.append(xeqw * trials[-1] / results[-1])
-            logger.debug(" Using linear approximation for new guess: {0:e}".format(trials[-1]))
+            if len(results) < 2:
+                trials.append(xeqw * trials[-1] / results[-1])
+                logger.debug(" Using linear approximation for new guess: {0:e}".format(trials[-1]))
+            else:
+                trials.append(Secant(trials,results,xeqw))
+                if trials[-1] < 0:
+                    trials[-1] = (xeqw * trials[-2] / results[-1])
+                    logger.debug(" Using linear approximation for new guess: {0:e}".format(trials[-1]))
+                else:
+                    logger.debug(" Using secant method for new guess: {0:e}".format(trials[-1]))
     else:
         finAbun.append('{0:0.2e} {1:.2f}'.format(trials[-1], math.log(trials[-1],10) + LOGHE))
     logger.info('Result: %s', finAbun[-1])
@@ -206,3 +221,9 @@ with open(OUTFN,'w') as f:
         f.write(' {0}'.format(finAbun[i]))
     f.write('\n')
 logger.info("Total runs: %d", IS.runs)
+
+# Resetting the fort.56 file
+IS.ABUNDANCES = []
+for i in INITABUNZWISE:
+    IS.ABUNDANCES.append((i,INITABUNZWISE[i]))
+IS.write56()
