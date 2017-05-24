@@ -5,10 +5,14 @@
 # K.Sriram
 # Created: 20/04/2017
 
+from time import time
 import logging
 import logging.handlers
 from isynspec import *
 import math
+
+startTime = time()
+
 
 # Initializing the logger
 logger = logging.getLogger('aeqw')
@@ -227,3 +231,5 @@ IS.ABUNDANCES = []
 for i in INITABUNZWISE:
     IS.ABUNDANCES.append((i,INITABUNZWISE[i]))
 IS.write56()
+
+logger.info("Runtime: {0:.3f}".format(time()-startTime))
