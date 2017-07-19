@@ -177,25 +177,25 @@ for tl in testLines:
         logger.debug(" Running for abundance: {0:e}, target width: {1:f}".format(trials[-1],xeqw))
         Run([(Z,trials[-1])])
         results.append(CalcEqw(testLine) - zero)
-        if results[-1] is None or results[-1] == 0:
+        if results[-1] is None or (results[-1] >=0 and results[-1] < xeqw/10): # Limiting our increase by a factor of ten
             if trials[-1] < .1:
                 logger.debug("Negligible width detected, multiplying abundance by 10")
                 trials.append(trials[-1] * 10)
                 continue
             else:
                 finAbun.append('No line Detected')
-                logger.debug('No line Detected')
+                logger.warning('No line Detected')
                 break
         elif results[-1] * xeqw < 0:
-            logger.debug('eqw * xeqw < 0')
+            logger.warning('eqw * xeqw < 0')
             if trials[-1] > 0.1:
-                finAbun.append('Line Strength Insufficient')
+                finAbun.append('Line Strength Insufficient with Emmision/Absorbtion mismatch')
             else:
                 finAbun.append('Emmision/Absorption mismatch')
             break
         else:
             logger.debug("  Guess = {0:e}, Result = {1:f}, Target = {2:f}, Diff = {3:f}, Epsilon = {4:f}".format(trials[-1],results[-1],xeqw,xeqw-results[-1],EPSILON))
-            if len(results) < 2:
+            if len(results) < 2 or all([not (i is None or (i >=0 and i < xeqw/10)) for i in results[-2:]]): # Checking if last two runs gave a valid result
                 trials.append(xeqw * trials[-1] / results[-1])
                 logger.debug(" Using linear approximation for new guess: {0:e}".format(trials[-1]))
             else:
@@ -205,6 +205,10 @@ for tl in testLines:
                     logger.debug(" Using linear approximation for new guess: {0:e}".format(trials[-1]))
                 else:
                     logger.debug(" Using secant method for new guess: {0:e}".format(trials[-1]))
+        if trials[-1] > 1.0:
+            logger.warning("Line Strength Insufficient")
+            finAbun.append("Line Strength Insufficient. Manual Examination suggested.")
+            break
     else:
         finAbun.append('{0: >8.2e}  {1: >7.2f}'.format(trials[-1], math.log(trials[-1],10) + LOGHE))
     logger.info('Result: %s', finAbun[-1])
