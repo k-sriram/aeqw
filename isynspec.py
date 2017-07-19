@@ -108,6 +108,9 @@ class ISynspec:
         with open('fort.56','w') as f:
             f.write('{0:d}\n'.format(len(self.ABUNDANCES)))
             for ABUN in self.ABUNDANCES:
+                # Checking for unusual abundances
+                if ABUN[1] > 1.0 or ABUN[1] < 0.0:
+                    logger.warning("Unusual value of abundance is being input: {0:d} {1:e}".format(ABUN[0],ABUN[1]))
                 f.write('{0:d} {1:e}\n'.format(ABUN[0],ABUN[1]).replace('e',''))
     # Methods to read from output file.
     def read16(self):
