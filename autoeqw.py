@@ -206,7 +206,7 @@ for tl in testLines:
                 else:
                     logger.debug(" Using secant method for new guess: {0:e}".format(trials[-1]))
     else:
-        finAbun.append('{0:0.2e} {1:.2f}'.format(trials[-1], math.log(trials[-1],10) + LOGHE))
+        finAbun.append('{0: >8.2e}  {1: >7.2f}'.format(trials[-1], math.log(trials[-1],10) + LOGHE))
     logger.info('Result: %s', finAbun[-1])
 
 # Writing the output
@@ -215,14 +215,14 @@ with open(OUTFN,'w') as f:
     if INCONSISTENT:
         f.write("Model Inconsistent ")
     f.write("{0:.2f} {1:.2f}\n".format(IS.TEMP,IS.LOGG))
-    f.write("LAMBDANM  Z.Q  ABUN/He  LOGABUN")
+    f.write("LAMBDANM   Z.Q    ABUN/He  LOGABUN")
     for i in range(len(testLines)):
         if type(testLines[i]) == str:
             f.write('\n' + testLines[i].rstrip('\n'))
             continue
         for line in testLines[i][0]:
-            f.write('\n{0:.4f} {1:2d}.{2:0>2d}'.format(line.ALAM,line.Z,line.Q))
-        f.write(' {0}'.format(finAbun[i]))
+            f.write('\n{0: >8.4f}  {1: >2d}.{2:0>2d}'.format(line.ALAM,line.Z,line.Q))
+        f.write('  {0}'.format(finAbun[i]))
     f.write('\n')
 logger.info("Total runs: %d", IS.runs)
 
