@@ -129,10 +129,12 @@ def CalcEqw(testLine):
     box = ( min(testLine).ALAM * 10 - BROAD, max(testLine).ALAM * 10 + BROAD )
     logger.debug("  CalcEqw: Calculating Equivalent width; including bins in {0}.".format(str(box)))
     total = 0
+    alltotal = 0
     for bin in IS.EQW:
         total += bin[1] * Overlap(bin[0],box)
-    logger.debug("  CalcEqw: eqw = {0:f}".format(total))
-    return total
+        alltotal += bin[1]
+    logger.debug("  CalcEqw: eqw = {0:f}, alleqw = {1:f}".format(total,alltotal))
+    return total, alltotal
 
 # Set the abundance and run SYNSPEC and read the output
 def Run(abundances):
@@ -161,14 +163,14 @@ for tl in testLines:
     logger.debug(" Performing zero check")
     abun = NULLABUN
     Run([(Z,abun)])
-    zero = CalcEqw(testLine)
+    zero, allzero = CalcEqw(testLine)
     while zero is None:     # If the program didn't compute the bins
         IS.RELOP /= 10
         logger.debug(" > Setting RELOP parameter to {0:.1e}".format(IS.RELOP))
         IS.write55()
         Run([(Z,abun)])
-        zero = CalcEqw(testLine)
-    logger.debug(" > Zero = {0:f}".format(zero))
+        zero, allzero = CalcEqw(testLine)
+    logger.debug(" > Zero = {0:f}, allZero = {1:f}".format(zero,allzero))
 
     # Finding the abundance that gives reasonable eqw
     trials = [INITABUNZWISE.get(Z,INITABUN)]
@@ -176,7 +178,7 @@ for tl in testLines:
     while not results or abs(results[-1] - xeqw) > EPSILON:
         logger.debug(" Running for abundance: {0:e}, target width: {1:f}".format(trials[-1],xeqw))
         Run([(Z,trials[-1])])
-        results.append(CalcEqw(testLine) - zero)
+        results.append(CalcEqw(testLine)[0] - zero)
         if results[-1] is None or (results[-1] >=0 and results[-1] < xeqw/10): # Limiting our increase by a factor of ten
             if trials[-1] < .1:
                 logger.debug("Negligible width detected, multiplying abundance by 10")
@@ -210,7 +212,9 @@ for tl in testLines:
             finAbun.append("Line Strength Insufficient. Manual Examination suggested.")
             break
     else:
-        finAbun.append('{0: >8.2e}  {1: >7.2f}'.format(trials[-1], math.log(trials[-1],10) + LOGHE))
+        alleqw = CalcEqw(testLine)[1]
+        wingpercent = alleqw / results[-1] * 100
+        finAbun.append('{0: >8.2e}  {1: >7.2f}    {2: >2.0f}%'.format(trials[-1], math.log(trials[-1],10) + LOGHE, wingpercent))
     logger.info('Result: %s', finAbun[-1])
 
 # Writing the output
