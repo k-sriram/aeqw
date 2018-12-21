@@ -40,6 +40,7 @@ logger.debug(' Parameters: INFN: {0:s}, OUTFN, {1:s}, INITABUN: {2:.1e}, NULLABU
 BROAD = 2.0
 RANGE = 5.0
 EPSILON = 0.1
+SEP19 = 0
 IS = ISynspec()
 
 INITABUNZWISE = {}
@@ -68,8 +69,9 @@ with open(INFN) as f:
     BROAD = float(tokens[2])
     RANGE = float(tokens[3])
     EPSILON = float(tokens[4])
+    if len(tokens) > 5: SEP19 = int(tokens[5])
     logger.debug(' Parameters from input file: Model filename: {0}'.format(IS.modelFN))
-    logger.debug(' > LOG[He]: {0:f}, BROAD: {1:f}, RANGE: {2:f}, EPSILON: {3:e}'.format(LOGHE,BROAD,RANGE,EPSILON))
+    logger.debug(' > LOG[He]: {0:f}, BROAD: {1:f}, RANGE: {2:f}, EPSILON: {3:e}, SEP19: {4:d}'.format(LOGHE,BROAD,RANGE,EPSILON,SEP19))
     for line in f:
         logger.debug(' Processing line: {0}'.format(line.strip()))
         lineNo += 1
@@ -103,11 +105,15 @@ IS.write19()
 
 def InitParam(testLine, allLines):
     global IS
-    IS.ALAM0 = min(testLine).ALAM * 10 - RANGE
-    IS.ALAM1 = max(testLine).ALAM * 10 + RANGE
+    IS.ALAM0 = min([line.ALAM for line in testLine]) * 10 - RANGE
+    IS.ALAM1 = max([line.ALAM for line in testLine]) * 10 + RANGE
     logger.debug(" InitParam: Setting range of synthetic spectrum: ({0:.1f}, {1:.1f})".format(IS.ALAM0,IS.ALAM1))
-    
+
     IS.write55()
+
+    if SEP19 != 0:
+        IS.LINELIST = testLine
+        IS.write19()
     
 def Overlap(bin,box):
     l = max(bin[0],box[0])
@@ -125,8 +131,8 @@ def CalcEqw(testLine):
     global IS
     if len(IS.EQW) < 2:
         logger.warning("  CalcEqw: SYNSPEC did not generate output in fort.16")
-        return None
-    box = ( min(testLine).ALAM * 10 - BROAD, max(testLine).ALAM * 10 + BROAD )
+        return None, 0
+    box = ( min([line.ALAM for line in testLine]) * 10 - BROAD, max([line.ALAM for line in testLine]) * 10 + BROAD )
     logger.debug("  CalcEqw: Calculating Equivalent width; including bins in {0}.".format(str(box)))
     total = 0
     alltotal = 0
@@ -213,7 +219,7 @@ for tl in testLines:
             break
     else:
         alleqw = CalcEqw(testLine)[1]
-        wingpercent = alleqw / results[-1] * 100
+        wingpercent = ((alleqw-allzero) / results[-1] - 1 )* 100
         finAbun.append('{0: >8.2e}  {1: >7.2f}    {2: >2.0f}%'.format(trials[-1], math.log(trials[-1],10) + LOGHE, wingpercent))
     logger.info('Result: %s', finAbun[-1])
 
@@ -223,7 +229,7 @@ with open(OUTFN,'w') as f:
     if INCONSISTENT:
         f.write("Model Inconsistent ")
     f.write("{0:.2f} {1:.2f}\n".format(IS.TEMP,IS.LOGG))
-    f.write("LAMBDANM   Z.Q    ABUN/He  LOGABUN")
+    f.write("LAMBDANM   Z.Q    ABUN/He  LOGABUN   wing%")
     for i in range(len(testLines)):
         if type(testLines[i]) == str:
             f.write('\n' + testLines[i].rstrip('\n'))
