@@ -16,7 +16,10 @@ def fortfloat(x):
         return float(x)
     return float(x.replace('-','e-').replace('+','e+'))
 
-class InvalidInput(Exception):
+class aeqwISError(Exception):
+    pass
+
+class InvalidInput(aeqwISError):
     def __init__(self,message,context,value='',expected=''):
         self.msg = 'Invalid input in {0:s}. Expected {1:s}, Received {2:s}. {3:s}'.format(context,expected,value,message)
     def __str__(self):
