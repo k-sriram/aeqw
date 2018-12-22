@@ -167,6 +167,11 @@ The meaning of these parameters are:
 **`RANGE`**: Half width (in Å) of the generated synthetic spectrum used for analysis. This can be much larger than the linewidth, smaller values just save compute time.  
 **`EPSILON`**: Accuracy to which the program will try to match the equivalent width.  
 
+The configuration parameters can be overriden by passing them as command-line arguments. Run the following code to see how to do it.
+
+```sh
+./autoeqw.py -h
+```
 
 ### Input file: `aeqw.in`
 
