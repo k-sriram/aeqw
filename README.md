@@ -160,8 +160,8 @@ The meaning of these parameters are:
 **`INFN`**: The name of the input file.  
 **`OUTFN`**: The name of the output file.  
 **`EXTRALOGFN`**: If this is specified the log data is also written to this file apart from `aeqw.log`.  
-**`INITABUN`**: The initial assumed abundance in the absence of anything given in `fort.56` while estimating the abundance. See [How `aeqw` functions](#how-aeqw-functions) point 5.3.  
-**`NULLABUN`**: The abundance used to estimate the zero values of equivalent width.  See [How `aeqw` functions](#how-aeqw-functions) point 5.2.  
+**`INITABUN`**: The initial assumed abundance in the absence of anything given in `fort.56` while estimating the abundance. See [How `aeqw` functions](#how-aeqw-functions) point 5.iii.  
+**`NULLABUN`**: The abundance used to estimate the zero values of equivalent width.  See [How `aeqw` functions](#how-aeqw-functions) point 5.ii.  
 **`LOGATREF`**: Logarithm of the absolute abundance of the reference element. This is used to calculate the absolute abundance of all the elements in the output file.  
 **`BROAD`**: Half width (in Å) upto which absorption is assumed to come from the line. Set it so as to cover the entire line. If set correctly 'wing%' should be low for isolated lines and non-isolated lines shouldn't feed into each other.  
 **`RANGE`**: Half width (in Å) of the generated synthetic spectrum used for analysis. This can be much larger than the linewidth, smaller values just save compute time.  
@@ -245,12 +245,12 @@ The first line contains the temperature and logarithm of surface gravity. The ne
 4. All lines are written to `fort.19`.
 5. The following steps are taken for each set of lines:
    1. The bounds of the synthetic spectrum are set. This is simply (smallest wavelength – `RANGE`, largest wavelength + `RANGE`) where `RANGE` is a parameter that can be set in `aeqw.conf` (this can be much larger than the linewidth, smaller values just save compute time). This is written to `fort.55`.
-   2. The equivalent width is calculated (using the method in steps 4. to 6.) for an abundance of `10e-10` (settable by modifying `NULLABUN` in `aeqw.conf`). This is used as a zero baseline for future calculations.
+   2. The equivalent width is calculated (using the method in steps iv. to vi.) for an abundance of `10e-10` (settable by modifying `NULLABUN` in `aeqw.conf`). This is used as a zero baseline for future calculations.
    3. An initial value of abundance is assumed. (settable by modifying `INITABUN` in `aeqw.conf`, default `1e-4`).
    4. The assumed value of abundance is written into `fort.56`. The atomic number is inferred from the specification of the line.
    5. `SYNSPEC` is run.
    6. `fort.16` is read. The equivalent width is calculated. Only bins which are up to a distance specified by the parameter `BROAD` (set it so that it covers all absorbtion, but not large enough to read from other lines) from the spectral line are considered. If the edge of the considered range is inside a bin, the bin is considered partially.
-   7. It is checked if the value of equivalent width is acceptable (using the parameter `EPSILON` in `aeqw.conf`). If not a new estimate for abundance is made and the steps 4. to 6. are repeated. The new estimate is arrived by assuming the equivalent width to be a linear function of abundance. It is also checked if the line is too weak or if we see emission.
+   7. It is checked if the value of equivalent width is acceptable (using the parameter `EPSILON` in `aeqw.conf`). If not a new estimate for abundance is made and the steps iv. to vi. are repeated. The new estimate is arrived by assuming the equivalent width to be a linear function of abundance. It is also checked if the line is too weak or if we see emission.
 6.  The output is written to the output file. See specifications in [previous section](#how-to-use-aeqw) to interpret it.
 
 ## Logging
