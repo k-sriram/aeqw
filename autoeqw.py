@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 # autoeqw.py
 # Program to automate the calculation of abundance of an element given its
 # equivalent width in a particular spectral line.

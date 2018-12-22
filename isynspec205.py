@@ -1,4 +1,5 @@
 # isynspec205.py
+# -*- coding: utf-8 -*-
 # Program to automate the calculation of abundance of an element given its
 # equivalent width in a particular spectral line.
 # K.Sriram
@@ -49,10 +50,7 @@ class INLIN(object):
             self.GW = float(line[70:77])
             self.remainder = line[79:]
         except ValueError as e:
-            logger.error("Error parsing spectral line: ")
-            logger.error(INLINstr)
-            logger.error(e)
-            raise InvalidInput('Spectral line couldn\'t be parsed.','INLIN',str(INLINstr),'<see SYNSPEC doc>')
+            raise InvalidInput('Spectral line couldn\'t be parsed.','INLIN',str(INLINstr),'<see SYNSPEC doc>') from e
     def __str__(self):
         return '{0:>10.4f}{1:>3d}.{2:0>2d}{3:>7.3f}{4:>12.3f}{5:>4.1f}{6:>12.3f}{7:>4.1f} {8:>7.2f}{9:>7.2f}{10:>7.2f} 0'.format(self.ALAM, self.Z, self.Q, self.GF, self.EXCL, self.QL, self.EXCU, self.QU, self.AGAM, self.GS, self.GW)
         
@@ -199,3 +197,4 @@ class ISynspec(object):
         else: 
             return '{0:s}.{1:d}'.format(self.model,unit)
 
+__all__ = ['fortfloat', 'aeqwISError', 'InvalidInput', 'ISUnitNotFoundError', 'INLIN', 'ISynspec']
