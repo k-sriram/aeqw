@@ -1,9 +1,11 @@
-# Isynspec.py
+# isynspec205.py
 # Program to automate the calculation of abundance of an element given its
 # equivalent width in a particular spectral line.
 # K.Sriram
 # Created: 20/04/2017
 
+from warnings import warn
+import itertools
 from subprocess import call
 import logging
 
@@ -15,12 +17,12 @@ def fortfloat(x):
     return float(x.replace('-','e-').replace('+','e+'))
 
 class InvalidInput(Exception):
-    def __init__(self,line):
-        self.msg = line
+    def __init__(self,message,context,value='',expected=''):
+        self.msg = 'Invalid input in {0:s}. Expected {1:s}, Received {2:s}. {3:s}'.format(context,expected,value,message)
     def __str__(self):
         return self.msg
 
-class INLIN:
+class INLIN(object):
     ALAM, Z, Q, GF, EXCL, QL, EXCU, QU, GS, GW, INEXT = 0., 1, 0, 0.,  0., 0., 0., 0.,  0., 0., 0.,
     def __init__(self, INLINstr):
         try:
@@ -36,20 +38,19 @@ class INLIN:
             self.GS = float(line[63:70])
             self.GW = float(line[70:77])
             self.remainder = line[79:]
-        except Exception as e:
+        except ValueError as e:
             logger.error("Error parsing spectral line: ")
             logger.error(INLINstr)
             logger.error(e)
-            raise InvalidInput(INLINstr)
+            raise InvalidInput('Spectral line couldn\'t be parsed.','INLIN',str(INLINstr),'<see SYNSPEC doc>')
     def __str__(self):
         return '{0:>10.4f}{1:>3d}.{2:0>2d}{3:>7.3f}{4:>12.3f}{5:>4.1f}{6:>12.3f}{7:>4.1f} {8:>7.2f}{9:>7.2f}{10:>7.2f} 0'.format(self.ALAM, self.Z, self.Q, self.GF, self.EXCL, self.QL, self.EXCU, self.QU, self.AGAM, self.GS, self.GW)
         
 
 
-class ISynspec:
+class ISynspec(object):
     runs = 0
     # Here come some default values of all the parameters. See synspec guide to understand.
-    modelFN = ''
     # fort.55
     IMODE, IDSTD, IPRIN = 1, 32, 0
     INMOD, INTRPL, ICHANG, ICHEMC = 1, 0, 0, 1
@@ -73,18 +74,19 @@ class ISynspec:
                '{20:.1f} {21:.1f} {22:d} {23:d} {24:.1e} {25:f}\n'
                '{26}\n'
                '{27:f}\n')
-    def __init__(self):
+    def __init__(self,model='fort'):
+        self.model = model
         self.read55()
     # Test if the Temperature and Gravity are same in both the model and concentration file
     # An error was found in this method of reading fort.8. It seems not all fort.8 files have this information.
     def TestTG(self):
         logger.debug(" Checking to see if T and log g are consistent between files.")
-        with open(self.modelFN+'.5') as f:
+        with open(self._getmodelfn(5)) as f:
             tokens = f.readline().split()
             self.TEMP = float(tokens[0])
             self.LOGG = float(tokens[1])
         try:
-            with open(self.modelFN+'.7') as f:
+            with open(self._getmodelfn(8)) as f:
                 tokens = f.readline().split()
                 TEMP = float(tokens[2])
                 LOGG = float(tokens[3])
@@ -144,13 +146,17 @@ class ISynspec:
             self.NMLIST = f.readline().strip()
             # Line 8
             self.VTB = float(f.readline().strip())
+        if self.ICHEMC == 0:
+            logger.error('Program can\'t run with ICHEMC set to 0 in \'fort.55\'. Set it to 1.')
+            raise InvalidInput('SYNSPEC wouldn\'t read \'fort.56\' with ICHEMC set to 0 in \'fort.55\'. Set it to 1. See SYNSPEC guide for further info on how to set ICHEMC','fort.55.ICHEMC', str(self.ICHEMC), '1')
+            
     # Reading fort.56, this can be used to set the initial abundances or checking.
     def read56(self):
         logger.debug("    Reading from fort.56")
         with open('fort.56') as f:
             self. ABUNDANCES = []
-            lines = int(f.readline().strip())
-            for i in range(lines):
+            nelem = int(f.readline().strip())
+            for _ in itertools.repeat(None, nelem):
                 line = f.readline()
                 tokens = line.split()
                 self.ABUNDANCES.append((int(tokens[0]),fortfloat(tokens[1])))
@@ -158,10 +164,20 @@ class ISynspec:
 
     # Running the SYNSPEC program. self.runs is a counter that keeps track of number of runs.
     def run(self):
-        logger.debug("   Running SYNSPEC: RSynspec {0}".format(self.modelFN))
+        logger.debug("   Running SYNSPEC: RSynspec {0}".format(self.model))
         call(['rm','-f','fort.16']) # To avoid reading previous data in case of SYNSPEC not running.
         self.runs += 1
         with open('/dev/null','r+') as nullf:
-            call(['RSynspec', self.modelFN],stdout=nullf)
+            call(['RSynspec', self.model],stdout=nullf)
 
+    # Backwards compatibility
+    def _getmodelfn(self, unit):
+        if hasattr(self,'modelFN'):
+            warn('Use of modelFN is deprecated with TLUSTY205, use model instead.',DeprecationWarning)
+            if unit == 5:
+                return self.modelFN
+        if self.model != 'fort' and unit == 8: # The model is not stored in model.7 instead of fort.8
+            return '{0:s}.7'.format(self.model)
+        else: 
+            return '{0:s}.{1:d}'.format(self.model,unit)
 
