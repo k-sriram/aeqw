@@ -133,9 +133,6 @@ with ISynspec(args.model) as IS:
                 raise
 
     INCONSISTENT = False
-    if not IS.TestTG():
-        logger.warning("Discrepancy between fort.8 and model temperature / gravity.")
-        INCONSISTENT = True
     allLines.sort(key=lambda x:x.ALAM)
     IS.LINELIST = allLines
     IS.write19()
@@ -264,8 +261,6 @@ with ISynspec(args.model) as IS:
     # Writing the output
     with open(conf['OUTFN'],'w') as f:
         logger.debug("Writing Output")
-        if INCONSISTENT:
-            f.write("Model Inconsistent ")
         f.write("{2:s} {0:.2f} {1:.2f}\n".format(IS.TEMP,IS.LOGG,args.model))
         f.write("LAMBDANM   Z.Q    ABUN/He  LOGABUN   wing%")
         for i in range(len(testLines)):

@@ -77,35 +77,17 @@ class ISynspec(object):
     def __init__(self,model='fort'):
         self.model = model
         self.read55()
-    def __enter__(self):
-        self.INITABUNZWISE = {}
         self.read56()
-        for  i in self.ABUNDANCES:
-            self.INITABUNZWISE[i[0]] = i[1]
+        self.INITABUNZWISE = {i[0]:i[1] for i in self.ABUNDANCES}
+        self.readmodel()
+    def __enter__(self):
         return self
     def __exit__(self, type, value, traceback):
         self.ABUNDANCES = []
         for i in self.INITABUNZWISE:
             self.ABUNDANCES.append((i,self.INITABUNZWISE[i]))
         self.write56()
-    # Test if the Temperature and Gravity are same in both the model and concentration file
-    # An error was found in this method of reading fort.8. It seems not all fort.8 files have this information.
-    def TestTG(self):
-        logger.debug(" Checking to see if T and log g are consistent between files.")
-        with open(self._getmodelfn(5)) as f:
-            tokens = f.readline().split()
-            self.TEMP = float(tokens[0])
-            self.LOGG = float(tokens[1])
-        try:
-            with open(self._getmodelfn(8)) as f:
-                tokens = f.readline().split()
-                TEMP = float(tokens[2])
-                LOGG = float(tokens[3])
-        except IndexError:
-            logger.warning("Unable to read temperature and gravity information in fort.8")
-            return True # Reurning True although there is an error since there is no mismatch. Only absence of data.
-        else:
-            return TEMP == self.TEMP and LOGG == self.LOGG
+    
 
     # Methods to write to input files.
     def write55(self):
@@ -172,6 +154,12 @@ class ISynspec(object):
                 tokens = line.split()
                 self.ABUNDANCES.append((int(tokens[0]),fortfloat(tokens[1])))
 
+    # Read model file to get Teff and logg.
+    def readmodel(self):
+        with open(self._getmodelfn(5)) as f:
+            tokens = f.readline().split()
+            self.TEMP = float(tokens[0])
+            self.LOGG = float(tokens[1])
 
     # Running the SYNSPEC program. self.runs is a counter that keeps track of number of runs.
     def run(self):
