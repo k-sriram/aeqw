@@ -39,7 +39,7 @@ conf = {
 'EXTRALOGFN' : '',
 'INITABUN' : 1e-4,
 'NULLABUN' : 1e-10,
-'LOGHE' : 11.54,
+'LOGATREF' : 11.54,
 'BROAD' : 2.0,
 'RANGE' : 5.0,
 'EPSILON' : 0.1,
@@ -75,7 +75,7 @@ argparser.add_argument('-c', help='Extra configuration options file.')
 argparser.add_argument('--log', help='Extra log file.')
 argparser.add_argument('--initabun', type=float, help='Assumed initial abundance for elements if not described in \'fort.56\'. Default: {0:.2e}.'.format(conf['INITABUN']), default=conf['INITABUN'])
 argparser.add_argument('--nullabun', type=float, help='Abundance of elements used to estimate equivalent width at zero abundance. Default: {0:.2e}.'.format(conf['NULLABUN']), default=conf['NULLABUN'])
-argparser.add_argument('--loghe', type=float, help='Abundance of He. Default: {0:.2f}.'.format(conf['LOGHE']), default=conf['LOGHE'])
+argparser.add_argument('--logatref', type=float, help='Abundance of reference element. Default: {0:.2f}.'.format(conf['LOGATREF']), default=conf['LOGATREF'])
 argparser.add_argument('--broad', type=float, help=u'Half width (in Å) upto which absorption is assumed to come from the line. Set it so as to cover the entire line. If set correctly \'wing%\' should be low for isolated lines. Default: {0:.2f}.'.format(conf['BROAD']), default=conf['BROAD'])
 argparser.add_argument('--range', type=float, help=u'Half width (in Å) of the generated synthetic spectrum used for analysis. Default: {0:.1f}.'.format(conf['RANGE']), default=conf['RANGE'])
 argparser.add_argument('--epsilon', type=float, help='Accuracy to which the program will try to match the equivalent width. Default: {0:.1e}.'.format(conf['EPSILON']), default=conf['EPSILON'])
@@ -258,14 +258,14 @@ try:
             else:
                 alleqw = CalcEqw(testLine)[1]
                 wingpercent = ((alleqw-allzero) / results[-1] - 1 )* 100
-                finAbun.append('{0: >8.2e}  {1: >7.2f}    {2: >2.0f}%'.format(trials[-1], math.log(trials[-1],10) + conf['LOGHE'], wingpercent))
+                finAbun.append('{0: >8.2e}  {1: >7.2f}   {2: >4.0f}%'.format(trials[-1], math.log(trials[-1],10) + conf['LOGATREF'], wingpercent))
             logger.info('Result: %s', finAbun[-1])
 
         # Writing the output
         with open(conf['OUTFN'],'w') as f:
             logger.debug("Writing Output")
             f.write("{2:s} {0:.2f} {1:.2f}\n".format(IS.TEMP,IS.LOGG,args.model))
-            f.write("LAMBDANM   Z.Q    ABUN/He  LOGABUN   wing%")
+            f.write("LAMBDANM   Z.Q   ABUN/ref  LOGABUN   wing%")
             for i in range(len(testLines)):
                 if type(testLines[i]) == str:
                     f.write('\n' + testLines[i].rstrip('\n'))
