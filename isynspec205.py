@@ -17,13 +17,20 @@ def fortfloat(x):
     return float(x.replace('-','e-').replace('+','e+'))
 
 class aeqwISError(Exception):
-    pass
+    def __init__(self,msg):
+        global logger
+        self.msg = msg
+        logger.error(self.msg)
+    def __str__(self):
+        return self.msg
 
 class InvalidInput(aeqwISError):
     def __init__(self,message,context,value='',expected=''):
-        self.msg = 'Invalid input in {0:s}. Expected {1:s}, Received {2:s}. {3:s}'.format(context,expected,value,message)
-    def __str__(self):
-        return self.msg
+        aeqwISError.__init__(self,'Invalid input in {0:s}. Expected {1:s}, Received {2:s}. {3:s}'.format(context,expected,value,message))
+
+class ISUnitNotFoundError(aeqwISError):
+    def __init__(self,fn):
+        aeqwISError.__init__(self,'File \'{0:s}\' is missing.'.format(fn))
 
 class INLIN(object):
     ALAM, Z, Q, GF, EXCL, QL, EXCU, QU, GS, GW, INEXT = 0., 1, 0, 0.,  0., 0., 0., 0.,  0., 0., 0.,
@@ -116,46 +123,55 @@ class ISynspec(object):
     def read16(self):
         logger.debug("   Reading from fort.16")
         self.EQW = []
-        with open('fort.16') as f:
-            for line in f:
-                tokens = line.split()
-                self.EQW.append( ( (float(tokens[0]),float(tokens[1])), float(tokens[2]) ) )
+        try:
+            with open('fort.16') as f:
+                for line in f:
+                    tokens = line.split()
+                    self.EQW.append( ( (float(tokens[0]),float(tokens[1])), float(tokens[2]) ) )
+        except FileNotFoundError as err:
+            raise ISUnitNotFoundError('fort.16') from err
         return self.EQW
     # Reading fort.55 for values of all parameter.
     def read55(self):
         logger.debug("    Reading from fort.55")
-        with open('fort.55') as f:
-            # Line 1
-            self.IMODE, self.IDSTD, self.IPRIN = [int(i) for i in f.readline().split()]
-            # Line 2
-            self.INMOD, self.INTRPL, self.ICHANG, self.ICHEMC = [int(i) for i in f.readline().split()]
-            # Line 3
-            self.IOPHLI, self.NUNALP, self.NUNBET, self.NUNGAM, self.NUNBAL = [int(i) for i in f.readline().split()]
-            # Line 4
-            self.IFREQ, self.INLTE, self.ICONTL, self.INLIST, self.IFHE2 = [int(i) for i in f.readline().split()]
-            # Line 5
-            self.IHYDPR, self.IHE1PR, self.IHE2PR = [int(i) for i in f.readline().split()]
-            # Line 6
-            tokens = f.readline().split()
-            self.CUTOF0, self.RELOP, self.SPACE = int(tokens[2]), fortfloat(tokens[4]), float(tokens[5])
-            # Line 7
-            self.NMLIST = f.readline().strip()
-            # Line 8
-            self.VTB = float(f.readline().strip())
+        try:
+            with open('fort.55') as f:
+                # Line 1
+                self.IMODE, self.IDSTD, self.IPRIN = [int(i) for i in f.readline().split()]
+                # Line 2
+                self.INMOD, self.INTRPL, self.ICHANG, self.ICHEMC = [int(i) for i in f.readline().split()]
+                # Line 3
+                self.IOPHLI, self.NUNALP, self.NUNBET, self.NUNGAM, self.NUNBAL = [int(i) for i in f.readline().split()]
+                # Line 4
+                self.IFREQ, self.INLTE, self.ICONTL, self.INLIST, self.IFHE2 = [int(i) for i in f.readline().split()]
+                # Line 5
+                self.IHYDPR, self.IHE1PR, self.IHE2PR = [int(i) for i in f.readline().split()]
+                # Line 6
+                tokens = f.readline().split()
+                self.CUTOF0, self.RELOP, self.SPACE = int(tokens[2]), fortfloat(tokens[4]), float(tokens[5])
+                # Line 7
+                self.NMLIST = f.readline().strip()
+                # Line 8
+                self.VTB = float(f.readline().strip())
+        except FileNotFoundError as err:
+            raise ISUnitNotFoundError('fort.55') from err
         if self.ICHEMC == 0:
-            logger.error('Program can\'t run with ICHEMC set to 0 in \'fort.55\'. Set it to 1.')
             raise InvalidInput('SYNSPEC wouldn\'t read \'fort.56\' with ICHEMC set to 0 in \'fort.55\'. Set it to 1. See SYNSPEC guide for further info on how to set ICHEMC','fort.55.ICHEMC', str(self.ICHEMC), '1')
             
     # Reading fort.56, this can be used to set the initial abundances or checking.
     def read56(self):
         logger.debug("    Reading from fort.56")
-        with open('fort.56') as f:
-            self. ABUNDANCES = []
-            nelem = int(f.readline().strip())
-            for _ in itertools.repeat(None, nelem):
-                line = f.readline()
-                tokens = line.split()
-                self.ABUNDANCES.append((int(tokens[0]),fortfloat(tokens[1])))
+        try:
+            with open('fort.56') as f:
+                self. ABUNDANCES = []
+                nelem = int(f.readline().strip())
+                for _ in itertools.repeat(None, nelem):
+                    line = f.readline()
+                    tokens = line.split()
+                    self.ABUNDANCES.append((int(tokens[0]),fortfloat(tokens[1])))
+        except FileNotFoundError as err:
+            raise ISUnitNotFoundError('fort.56') from err
+
 
     # Read model file to get Teff and logg.
     def readmodel(self):
@@ -175,7 +191,7 @@ class ISynspec(object):
     # Backwards compatibility
     def _getmodelfn(self, unit):
         if hasattr(self,'modelFN'):
-            warn('Use of modelFN is deprecated with TLUSTY205, use model instead.',DeprecationWarning)
+            warn('Use of modelFN is deprecated with TLUSTY205, use model instead.',FutureWarning)
             if unit == 5:
                 return self.modelFN
         if self.model != 'fort' and unit == 8: # The model is not stored in model.7 instead of fort.8

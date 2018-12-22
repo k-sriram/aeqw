@@ -49,7 +49,10 @@ conf = {
 def readconf(conffn,conf,warnifnotfound=False):
     conffileparser = ConfigParser()
     if conffileparser.read(conffn) == []:
-        logger.log(logging.WARNING if warnifnotfound else logging.INFO,' Configuration file {0:s} not found.'.format(conffn))
+        if warnifnotfound:
+            logger.warn(' Configuration file {0:s} not found.'.format(conffn))
+        else:
+            logger.info(' Configuration information can be added to file {0:s}'.format(conffn))
         return
     logger.info(' Reading Configuration file: {0:s}'.format(conffn))
     conffilesec = conffileparser['aeqw'] if 'aeqw' in conffileparser else conffileparser['DEFAULT']
@@ -275,8 +278,6 @@ try:
 except aeqwISError as e:
     if __debug__:
         raise
-    else:
-        print(e)
 
 
 
