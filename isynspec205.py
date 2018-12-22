@@ -77,6 +77,17 @@ class ISynspec(object):
     def __init__(self,model='fort'):
         self.model = model
         self.read55()
+    def __enter__(self):
+        self.INITABUNZWISE = {}
+        self.read56()
+        for  i in self.ABUNDANCES:
+            self.INITABUNZWISE[i[0]] = i[1]
+        return self
+    def __exit__(self, type, value, traceback):
+        self.ABUNDANCES = []
+        for i in self.INITABUNZWISE:
+            self.ABUNDANCES.append((i,self.INITABUNZWISE[i]))
+        self.write56()
     # Test if the Temperature and Gravity are same in both the model and concentration file
     # An error was found in this method of reading fort.8. It seems not all fort.8 files have this information.
     def TestTG(self):
