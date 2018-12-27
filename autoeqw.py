@@ -10,27 +10,43 @@ from time import time
 import logging
 import logging.handlers
 import math
-from configparser import ConfigParser
+from configparser import ConfigParser, ExtendedInterpolation
 from argparse import ArgumentParser
 from isynspec import *
 
 CONFFN = 'aeqw.conf'
+confgetter = { 'str': 'get', 'float': 'getfloat', 'int': 'getint', 'bool': 'getboolean'}
 
-conf = {
-'INFN' : 'aeqw.in',
-'OUTFN' : 'aeqw.out',
-'EXTRALOGFN' : '',
-'INITABUN' : 1e-4,
-'NULLABUN' : 1e-10,
-'LOGATREF' : 11.54,
-'BROAD' : 2.0,
-'RANGE' : 5.0,
-'EPSILON' : 0.1,
-'SEP19' : False,
+
+conf = ConfigParser(interpolation=ExtendedInterpolation())
+conf['DEFAULT'] = {
+    'INFN' : 'aeqw.in',
+    'OUTFN' : 'aeqw.out',
+    'EXTRALOGFN' : '',
+    'INITABUN' : 1e-4,
+    'NULLABUN' : 1e-10,
+    'LOGATREF' : 11.54,
+    'BROAD' : 2.0,
+    'RANGE' : 5.0,
+    'EPSILON' : 0.1,
+    'SEP19' : False,
 }
+conf['TYPES'] = {
+    'INFN' : 'str',
+    'OUTFN' : 'str',
+    'EXTRALOGFN' : 'str',
+    'INITABUN' : 'float',
+    'NULLABUN' : 'float',
+    'LOGATREF' : 'float',
+    'BROAD' : 'float',
+    'RANGE' : 'float',
+    'EPSILON' : 'float',
+    'SEP19' : 'bool',
+}
+conf['aeqw'] = {}
 
 argparser = ArgumentParser(description='Program to automate equivalent width finding using SYNSPEC.')
-argparser.add_argument('model', help='Name of the input model (such as \'hhe35lt\').',default='fort')
+argparser.add_argument('model', help='Name of the input model (such as \'hhe35lt\').', nargs='?', default='fort')
 argparser.add_argument('-i', '--infn', help='Custom input filename.')
 argparser.add_argument('-o', '--outfn', help='Custom output filename.')
 argparser.add_argument('-c', action='append' ,help='Extra configuration options files. Can be repeated.')
@@ -48,24 +64,25 @@ argoptions = ('infn','outfn','extralogfn','initabun','nullabun','broad','range',
 
 startTime = time()
 
-def readconf(conffn,conf,warnifnotfound=False):
-    conffileparser = ConfigParser()
-    if conffileparser.read(conffn) == []:
+def readconf(conffn,conf=conf,warnifnotfound=False):
+    if conf.read(conffn) == []:
         if warnifnotfound:
             logger.warn(' Configuration file {0:s} not found.'.format(conffn))
         else:
             logger.info(' Configuration information can be added to file {0:s}'.format(conffn))
         return
     logger.info(' Reading Configuration file: {0:s}'.format(conffn))
-    conffilesec = conffileparser['aeqw'] if 'aeqw' in conffileparser else conffileparser['DEFAULT']
-    confgetter = { str: conffilesec.get, float: conffilesec.getfloat, int: conffilesec.getint, bool: conffilesec.getboolean}
-    for param in conf.keys():
-        if param in conffilesec:
-            try:
-                conf[param] = confgetter[type(conf[param])](param,fallback=conf[param])
-            except ValueError:
-                logging.warning('In {0:s}, invalid type for parameter {2:s}, expected {3:s}'.format(conffn,param,type(conf[param])))
-                logging.warning('Using previous values {0:s}'.format(conf[param]))
+
+def getconf(param,conf=conf,sec='aeqw'):
+    if param in conf[sec]:
+        try:
+            return getattr(conf[sec],confgetter[conf['TYPES'][param]])(param)
+        except ValueError:
+            logger.error('Invalid type for parameter {} in configuration'.format(param))
+            raise
+    else:
+        logger.error('Parameter {} not found'.format(param))
+        raise ValueError
 
 # Initializing the logger
 logger = logging.getLogger('aeqw')
@@ -82,10 +99,11 @@ filelog.doRollover()
 
 readconf(CONFFN,conf)
 
-for c in args.c:
-    readconf(c,conf,True)
+if args.c is not None:
+    for c in args.c:
+        readconf(c,conf,True)
 
-extralog = args.extralogfn if args.extralogfn is not None else (conf['EXTRALOGFN'] if conf['EXTRALOGFN'] != '' else None)
+extralog = args.extralogfn if args.extralogfn is not None else (getconf('EXTRALOGFN') if getconf('EXTRALOGFN') != '' else None)
 
 if extralog is not None:
     xtrafilelog = logging.FileHandler(extralog)
@@ -95,20 +113,27 @@ if extralog is not None:
 
 for option in argoptions:
     if getattr(args,option) is not None:
-        conf[option.upper()] = getattr(args,option)
+        conf['aeqw'][option.upper()] = getattr(args,option)
 if args.sep19 == True:
-    conf['SEP19'] = True
+    conf['aeqw']['SEP19'] = True
     
 logger.info('Running program: Automatic Equation width solver.')
 logger.info('Model: {}'.format(args.model))
 logger.debug('Initialization')
     
 logger.debug(' Parameters:')
-for param in conf:
-    logger.debug('  {0:s} : {1:s}'.format(param,str(conf[param])))
+for param in conf['aeqw'].keys():
+    logger.debug('  {0:s} : {1:s}'.format(param,str(getconf(param))))
 
 try:
     with ISynspec(args.model) as IS:
+
+        if 'unit55' in conf:
+            for param in conf['unit55']:
+                if hasattr(IS,param.upper()):
+                    setattr(IS,param.upper(),type(getattr(IS,param.upper()))(conf['unit55'][param]))
+                    logger.info("Setting unit 55 parameter {} to {}".format(param.upper(),getattr(IS,param.upper())))
+
 
         allLines = [] # allLines stores the information of all the lines that are going to be used
         # testLines stores which all lines have to be tested. It is a list. Each
@@ -121,7 +146,7 @@ try:
         lineNo = 1
 
         logger.debug("Reading input file.")
-        with open(conf['INFN']) as f:
+        with open(getconf('INFN')) as f:
             for line in f:
                 logger.debug(' Processing line: {0}'.format(line.strip()))
                 lineNo += 1
@@ -152,13 +177,13 @@ try:
 
         def InitParam(testLine, allLines):
             global IS
-            IS.ALAM0 = min([line.ALAM for line in testLine]) * 10 - conf['RANGE']
-            IS.ALAM1 = max([line.ALAM for line in testLine]) * 10 + conf['RANGE']
+            IS.ALAM0 = min([line.ALAM for line in testLine]) * 10 - getconf('RANGE')
+            IS.ALAM1 = max([line.ALAM for line in testLine]) * 10 + getconf('RANGE')
             logger.debug(" InitParam: Setting range of synthetic spectrum: ({0:.1f}, {1:.1f})".format(IS.ALAM0,IS.ALAM1))
 
             IS.write55()
 
-            if conf['SEP19'] == True:
+            if getconf('SEP19') == True:
                 IS.LINELIST = testLine
                 IS.write19()
             
@@ -169,7 +194,7 @@ try:
                 return 0.
             return math.sqrt((r-l)/(bin[1] - bin[0]))
         def Secant(x,f,y):
-            if abs(f[-1] - f[-2]) < conf['EPSILON']:
+            if abs(f[-1] - f[-2]) < getconf('EPSILON'):
                 return -1
             return (x[-2]*(f[-1]-y) - x[-1]*(f[-2]-y))/(f[-1]-f[-2])
 
@@ -179,7 +204,7 @@ try:
             if len(IS.EQW) < 2:
                 logger.warning("  CalcEqw: SYNSPEC did not generate output in fort.16")
                 return None, 0
-            box = ( min([line.ALAM for line in testLine]) * 10 - conf['BROAD'], max([line.ALAM for line in testLine]) * 10 + conf['BROAD'] )
+            box = ( min([line.ALAM for line in testLine]) * 10 - getconf('BROAD'), max([line.ALAM for line in testLine]) * 10 + getconf('BROAD') )
             logger.debug("  CalcEqw: Calculating Equivalent width; including bins in {0}.".format(str(box)))
             total = 0
             alltotal = 0
@@ -214,7 +239,7 @@ try:
             InitParam(testLine, allLines)
             # Setting Zero
             logger.debug(" Performing zero check")
-            abun = conf['NULLABUN']
+            abun = getconf('NULLABUN')
             Run([(Z,abun)])
             zero, allzero = CalcEqw(testLine)
             while zero is None:     # If the program didn't compute the bins
@@ -226,9 +251,9 @@ try:
             logger.debug(" > Zero = {0:f}, allZero = {1:f}".format(zero,allzero))
 
             # Finding the abundance that gives reasonable eqw
-            trials = [IS.INITABUNZWISE.get(Z,conf['INITABUN'])]
+            trials = [IS.INITABUNZWISE.get(Z,getconf('INITABUN'))]
             results = []
-            while not results or abs(results[-1] - xeqw) > conf['EPSILON']:
+            while not results or abs(results[-1] - xeqw) > getconf('EPSILON'):
                 logger.debug(" Running for abundance: {0:e}, target width: {1:f}".format(trials[-1],xeqw))
                 Run([(Z,trials[-1])])
                 results.append(CalcEqw(testLine)[0] - zero)
@@ -249,7 +274,7 @@ try:
                         finAbun.append('Emmision/Absorption mismatch')
                     break
                 else:
-                    logger.debug("  Guess = {0:e}, Result = {1:f}, Target = {2:f}, Diff = {3:f}, Epsilon = {4:f}".format(trials[-1],results[-1],xeqw,xeqw-results[-1],conf['EPSILON']))
+                    logger.debug("  Guess = {0:e}, Result = {1:f}, Target = {2:f}, Diff = {3:f}, Epsilon = {4:f}".format(trials[-1],results[-1],xeqw,xeqw-results[-1],getconf('EPSILON')))
                     if len(results) < 2 or all([not (i is None or (i >=0 and i < xeqw/10)) for i in results[-2:]]): # Checking if last two runs gave a valid result
                         trials.append(xeqw * trials[-1] / results[-1])
                         logger.debug(" Using linear approximation for new guess: {0:e}".format(trials[-1]))
@@ -267,13 +292,17 @@ try:
             else:
                 alleqw = CalcEqw(testLine)[1]
                 wingpercent = ((alleqw-allzero) / results[-1] - 1 )* 100
-                finAbun.append('{0: >8.2e}  {1: >7.2f}   {2: >4.0f}%'.format(trials[-1], math.log(trials[-1],10) + conf['LOGATREF'], wingpercent))
+                finAbun.append('{0: >8.2e}  {1: >7.2f}   {2: >4.0f}%'.format(trials[-1], math.log(trials[-1],10) + getconf('LOGATREF'), wingpercent))
             logger.info('Result: %s', finAbun[-1])
 
         # Writing the output
-        with open(conf['OUTFN'],'w') as f:
+        with open(getconf('OUTFN'),'w') as f:
             logger.debug("Writing Output")
             f.write("{2:s} {0:.2f} {1:.2f}\n".format(IS.TEMP,IS.LOGG,args.model))
+            if 'unit55' in conf:
+                for param in conf['unit55']:
+                    if hasattr(IS,param.upper()):
+                        f.write('{} = {}\n'.format(param.upper(),getattr(IS,param.upper())))
             f.write("LAMBDANM   Z.Q   ABUN/ref  LOGABUN   wing%")
             for i in range(len(testLines)):
                 if type(testLines[i]) == str:
