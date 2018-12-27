@@ -14,25 +14,6 @@ from configparser import ConfigParser
 from argparse import ArgumentParser
 from isynspec import *
 
-startTime = time()
-
-
-# Initializing the logger
-logger = logging.getLogger('aeqw')
-logger.setLevel(logging.DEBUG)
-console = logging.StreamHandler()
-console.setLevel(logging.INFO)
-console.setFormatter(logging.Formatter('%(levelname)-8s: %(message)s'))
-logger.addHandler(console)
-filelog = logging.handlers.RotatingFileHandler('aeqw.log','a',maxBytes=0,backupCount=9)
-filelog.setLevel(logging.DEBUG)
-filelog.setFormatter(logging.Formatter('%(asctime)s - %(name)-15s %(levelname)-8s: %(message)s'))
-logger.addHandler(filelog)
-filelog.doRollover()
-
-logger.debug('Running program: Automatic Equation width solver.')
-logger.debug('Initialization')
-
 conf = {
 'INFN' : 'aeqw.in',
 'OUTFN' : 'aeqw.out',
@@ -46,6 +27,25 @@ conf = {
 'EPSILON' : 0.1,
 'SEP19' : False,
 }
+
+argparser = ArgumentParser(description='Program to automate equivalent width finding using SYNSPEC.')
+argparser.add_argument('model', help='Name of the input model (such as \'hhe35lt\').',default='fort')
+argparser.add_argument('-i', '--infn', help='Custom input filename.')
+argparser.add_argument('-o', '--outfn', help='Custom output filename.')
+argparser.add_argument('-c', help='Extra configuration options file.')
+argparser.add_argument('-l', '--extralogfn', help='Extra log file.')
+argparser.add_argument('--initabun', type=float, help='Assumed initial abundance for elements if not described in \'fort.56\'.')
+argparser.add_argument('--nullabun', type=float, help='Abundance of elements used to estimate equivalent width at zero abundance.')
+argparser.add_argument('--logatref', type=float, help='Abundance of reference element.')
+argparser.add_argument('--broad', type=float, help='Half width (in Å) upto which absorption is assumed to come from the line. Set it so as to cover the entire line. If set correctly \'wing%%\' should be low for isolated lines.')
+argparser.add_argument('--range', type=float, help='Half width (in Å) of the generated synthetic spectrum used for analysis.')
+argparser.add_argument('--epsilon', type=float, help='Accuracy to which the program will try to match the equivalent width.')
+argparser.add_argument('--sep19', action='store_true', help='Whether to generate a separate \'fort.19\' file for every line group.')
+args = argparser.parse_args()
+
+argoptions = ('infn','outfn','extralogfn','initabun','nullabun','broad','range','epsilon')
+
+startTime = time()
 
 def readconf(conffn,conf,warnifnotfound=False):
     conffileparser = ConfigParser()
@@ -66,35 +66,42 @@ def readconf(conffn,conf,warnifnotfound=False):
                 logging.warning('In {0:s}, invalid type for parameter {2:s}, expected {3:s}'.format(conffn,param,type(conf[param])))
                 logging.warning('Using previous values {0:s}'.format(conf[param]))
 
-readconf(conf['CONFFN'],conf)
+# Initializing the logger
+logger = logging.getLogger('aeqw')
+logger.setLevel(logging.DEBUG)
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+console.setFormatter(logging.Formatter('%(levelname)-8s: %(message)s'))
+logger.addHandler(console)
+filelog = logging.handlers.RotatingFileHandler('aeqw.log','a',maxBytes=0,backupCount=9)
+filelog.setLevel(logging.DEBUG)
+filelog.setFormatter(logging.Formatter('%(asctime)s - %(name)-15s %(levelname)-8s: %(message)s'))
+logger.addHandler(filelog)
+filelog.doRollover()
 
-argparser = ArgumentParser(description='Program to automate equivalent width finding using SYNSPEC.')
-argparser.add_argument('model', help='Name of the input model (such as \'hhe35lt\').',default='fort')
-argparser.add_argument('-i', help='Custom input filename. Default: {0:s}.'.format(conf['INFN']), default=conf['INFN'])
-argparser.add_argument('-o', help='Custom output filename. Default: {0:s}.'.format(conf['OUTFN']), default=conf['OUTFN'])
-argparser.add_argument('-c', help='Extra configuration options file.')
-argparser.add_argument('--log', help='Extra log file.')
-argparser.add_argument('--initabun', type=float, help='Assumed initial abundance for elements if not described in \'fort.56\'. Default: {0:.2e}.'.format(conf['INITABUN']), default=conf['INITABUN'])
-argparser.add_argument('--nullabun', type=float, help='Abundance of elements used to estimate equivalent width at zero abundance. Default: {0:.2e}.'.format(conf['NULLABUN']), default=conf['NULLABUN'])
-argparser.add_argument('--logatref', type=float, help='Abundance of reference element. Default: {0:.2f}.'.format(conf['LOGATREF']), default=conf['LOGATREF'])
-argparser.add_argument('--broad', type=float, help='Half width (in Å) upto which absorption is assumed to come from the line. Set it so as to cover the entire line. If set correctly \'wing%%\' should be low for isolated lines. Default: {0:.2f}.'.format(conf['BROAD']), default=conf['BROAD'])
-argparser.add_argument('--range', type=float, help='Half width (in Å) of the generated synthetic spectrum used for analysis. Default: {0:.1f}.'.format(conf['RANGE']), default=conf['RANGE'])
-argparser.add_argument('--epsilon', type=float, help='Accuracy to which the program will try to match the equivalent width. Default: {0:.1e}.'.format(conf['EPSILON']), default=conf['EPSILON'])
-argparser.add_argument('--sep19', action='store_true', help='Whether to generate a separate \'fort.19\' file for every line group.')
-args = argparser.parse_args()
+readconf(conf['CONFFN'],conf)
 
 if args.c is not None:
     readconf(args.c,conf,True)
 
-extralog = args.log if args.log is not None else (conf['EXTRALOGFN'] if conf['EXTRALOGFN'] != '' else None)
+extralog = args.extralogfn if args.extralogfn is not None else (conf['EXTRALOGFN'] if conf['EXTRALOGFN'] != '' else None)
 
 if extralog is not None:
     xtrafilelog = logging.FileHandler(extralog)
     xtrafilelog.setLevel(logging.DEBUG)
     xtrafilelog.setFormatter(logging.Formatter('%(asctime)s - %(name)-15s %(levelname)-8s: %(message)s'))
     logger.addHandler(xtrafilelog)
-    logger.debug('Adding extra log file {0:s}.'.format(extralog))
 
+for option in argoptions:
+    if getattr(args,option) is not None:
+        conf[option.upper()] = getattr(args,option)
+if args.sep19 == True:
+    conf['SEP19'] = True
+    
+logger.info('Running program: Automatic Equation width solver.')
+logger.info('Model: {}'.format(args.model))
+logger.debug('Initialization')
+    
 logger.debug(' Parameters:')
 for param in conf:
     logger.debug('  {0:s} : {1:s}'.format(param,str(conf[param])))
