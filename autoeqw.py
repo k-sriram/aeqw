@@ -14,10 +14,11 @@ from configparser import ConfigParser
 from argparse import ArgumentParser
 from isynspec import *
 
+CONFFN = 'aeqw.conf'
+
 conf = {
 'INFN' : 'aeqw.in',
 'OUTFN' : 'aeqw.out',
-'CONFFN' : 'aeqw.conf',
 'EXTRALOGFN' : '',
 'INITABUN' : 1e-4,
 'NULLABUN' : 1e-10,
@@ -32,7 +33,7 @@ argparser = ArgumentParser(description='Program to automate equivalent width fin
 argparser.add_argument('model', help='Name of the input model (such as \'hhe35lt\').',default='fort')
 argparser.add_argument('-i', '--infn', help='Custom input filename.')
 argparser.add_argument('-o', '--outfn', help='Custom output filename.')
-argparser.add_argument('-c', help='Extra configuration options file.')
+argparser.add_argument('-c', action='append' ,help='Extra configuration options files. Can be repeated.')
 argparser.add_argument('-l', '--extralogfn', help='Extra log file.')
 argparser.add_argument('--initabun', type=float, help='Assumed initial abundance for elements if not described in \'fort.56\'.')
 argparser.add_argument('--nullabun', type=float, help='Abundance of elements used to estimate equivalent width at zero abundance.')
@@ -79,10 +80,10 @@ filelog.setFormatter(logging.Formatter('%(asctime)s - %(name)-15s %(levelname)-8
 logger.addHandler(filelog)
 filelog.doRollover()
 
-readconf(conf['CONFFN'],conf)
+readconf(CONFFN,conf)
 
-if args.c is not None:
-    readconf(args.c,conf,True)
+for c in args.c:
+    readconf(c,conf,True)
 
 extralog = args.extralogfn if args.extralogfn is not None else (conf['EXTRALOGFN'] if conf['EXTRALOGFN'] != '' else None)
 
