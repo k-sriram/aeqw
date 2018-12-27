@@ -173,10 +173,20 @@ class ISynspec(object):
 
     # Read model file to get Teff and logg.
     def readmodel(self):
-        with open(self._getmodelfn(5)) as f:
-            tokens = f.readline().split()
-            self.TEMP = float(tokens[0])
-            self.LOGG = float(tokens[1])
+        try:
+            logger.debug('Checking existence of model input.')
+            with open(self._getmodelfn(5)) as f:
+                tokens = f.readline().split()
+                self.TEMP = float(tokens[0])
+                self.LOGG = float(tokens[1])
+        except FileNotFoundError as err:
+            raise ISUnitNotFoundError(self._getmodelfn(5)) from err
+        try:
+            logger.debug('Checking existence of model.')
+            with open(self._getmodelfn(8)) as _:
+                pass
+        except FileNotFoundError as err:
+            raise ISUnitNotFoundError(self._getmodelfn(8)) from err
 
     # Running the SYNSPEC program. self.runs is a counter that keeps track of number of runs.
     def run(self):
