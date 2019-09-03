@@ -244,9 +244,9 @@ try:
             zero, allzero = CalcEqw(testLine)
             while zero is None:     # If the program didn't compute the bins
                 if IS.RELOP > 1e-12:
-                IS.RELOP /= 10
-                logger.debug(" > Setting RELOP parameter to {0:.1e}".format(IS.RELOP))
-                IS.write55()
+                    IS.RELOP /= 10
+                    logger.debug(" > Setting RELOP parameter to {0:.1e}".format(IS.RELOP))
+                    IS.write55()
                 Run([(Z,abun)])
                 zero, allzero = CalcEqw(testLine)
                 
@@ -265,15 +265,15 @@ try:
                         trials.append(trials[-1] * 10)
                         continue
                     else:
-                        finAbun.append('No line Detected')
+                        finAbun.append('"No line Detected"')
                         logger.warning('No line Detected')
                         break
                 elif results[-1] * xeqw < 0:
                     logger.warning('eqw * xeqw < 0')
                     if trials[-1] > 0.1:
-                        finAbun.append('Line Strength Insufficient with Emmision/Absorbtion mismatch')
+                        finAbun.append('"Line Strength Insufficient with Emmision/Absorbtion mismatch"')
                     else:
-                        finAbun.append('Emmision/Absorption mismatch')
+                        finAbun.append('"Emmision/Absorption mismatch"')
                     break
                 else:
                     logger.debug("  Guess = {0:e}, Result = {1:f}, Target = {2:f}, Diff = {3:f}, Epsilon = {4:f}".format(trials[-1],results[-1],xeqw,xeqw-results[-1],getconf('EPSILON')))
@@ -289,7 +289,7 @@ try:
                             logger.debug(" Using secant method for new guess: {0:e}".format(trials[-1]))
                 if trials[-1] > 1.0:
                     logger.warning("Line Strength Insufficient")
-                    finAbun.append("Line Strength Insufficient. Manual Examination suggested.")
+                    finAbun.append('"Line Strength Insufficient. Manual Examination suggested."')
                     break
             else:
                 alleqw = CalcEqw(testLine)[1]
@@ -305,14 +305,14 @@ try:
                 for param in conf['unit55']:
                     if hasattr(IS,param.upper()):
                         f.write('{} = {}\n'.format(param.upper(),getattr(IS,param.upper())))
-            f.write("LAMBDANM   Z.Q   ABUN/ref  LOGABUN   wing%")
+            f.write("LAMBDANM   Z.Q      Teqw  ABUN/ref  LOGABUN   wing%")
             for i in range(len(testLines)):
                 if type(testLines[i]) == str:
                     f.write('\n' + testLines[i].rstrip('\n'))
                     continue
                 for line in testLines[i][0]:
                     f.write('\n{0: >8.4f}  {1: >2d}.{2:0>2d}'.format(line.ALAM,line.Z,line.Q))
-                f.write('  {0}'.format(finAbun[i]))
+                f.write(' {0:8.2f}  {1}'.format(testLines[i][1],finAbun[i]))
             f.write('\n')
         logger.info("Total runs: %d", IS.runs)
 except aeqwISError as e:
