@@ -84,6 +84,17 @@ def getconf(param,conf=conf,sec='aeqw'):
         logger.error('Parameter {} not found'.format(param))
         raise ValueError
 
+def Overlap(bin,box):
+    l = max(bin[0],box[0])
+    r = min(bin[1],box[1])
+    if l > r:
+        return 0.
+    return math.sqrt((r-l)/(bin[1] - bin[0]))
+def Secant(x,f,y):
+    if abs(f[-1] - f[-2]) < getconf('EPSILON'):
+        return -1
+    return (x[-2]*(f[-1]-y) - x[-1]*(f[-2]-y))/(f[-1]-f[-2])
+
 # Initializing the logger
 logger = logging.getLogger('aeqw')
 logger.setLevel(logging.DEBUG)
@@ -187,17 +198,6 @@ try:
                 IS.LINELIST = testLine
                 IS.write19()
             
-        def Overlap(bin,box):
-            l = max(bin[0],box[0])
-            r = min(bin[1],box[1])
-            if l > r:
-                return 0.
-            return math.sqrt((r-l)/(bin[1] - bin[0]))
-        def Secant(x,f,y):
-            if abs(f[-1] - f[-2]) < getconf('EPSILON'):
-                return -1
-            return (x[-2]*(f[-1]-y) - x[-1]*(f[-2]-y))/(f[-1]-f[-2])
-
         # Calculate the Equivalent width of a particular line
         def CalcEqw(testLine):
             global IS
