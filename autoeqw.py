@@ -243,11 +243,13 @@ try:
             Run([(Z,abun)])
             zero, allzero = CalcEqw(testLine)
             while zero is None:     # If the program didn't compute the bins
+                if IS.RELOP > 1e-12:
                 IS.RELOP /= 10
                 logger.debug(" > Setting RELOP parameter to {0:.1e}".format(IS.RELOP))
                 IS.write55()
                 Run([(Z,abun)])
                 zero, allzero = CalcEqw(testLine)
+                
             logger.debug(" > Zero = {0:f}, allZero = {1:f}".format(zero,allzero))
 
             # Finding the abundance that gives reasonable eqw
