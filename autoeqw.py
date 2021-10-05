@@ -6,13 +6,17 @@
 # K.Sriram
 # Created: 20/04/2017
 
+version='1.2.dev1'
+
+import sys
 from time import time
 import logging
 import logging.handlers
 import math
 from configparser import ConfigParser, ExtendedInterpolation
 from argparse import ArgumentParser
-from isynspec import *
+import json
+from isynspec import ISynspec, INLIN, aeqwISError
 
 CONFFN = 'aeqw.conf'
 confgetter = { 'str': 'get', 'float': 'getfloat', 'int': 'getint', 'bool': 'getboolean'}
@@ -30,6 +34,7 @@ conf['DEFAULT'] = {
     'RANGE' : 5.0,
     'EPSILON' : 0.1,
     'SEP19' : False,
+    'OUTFMT': 'txt',
 }
 conf['TYPES'] = {
     'INFN' : 'str',
@@ -42,6 +47,7 @@ conf['TYPES'] = {
     'RANGE' : 'float',
     'EPSILON' : 'float',
     'SEP19' : 'bool',
+    'OUTFMT': 'str',
 }
 conf['aeqw'] = {}
 
@@ -58,9 +64,11 @@ argparser.add_argument('--broad', type=float, help='Half width (in Å) upto whi
 argparser.add_argument('--range', type=float, help='Half width (in Å) of the generated synthetic spectrum used for analysis.')
 argparser.add_argument('--epsilon', type=float, help='Accuracy to which the program will try to match the equivalent width.')
 argparser.add_argument('--sep19', action='store_true', help='Whether to generate a separate \'fort.19\' file for every line group.')
+argparser.add_argument('--outfmt', help='Format of the output file, Valid options are txt and json.',choices=('txt','json'))
+argparser.add_argument('-v', action='store_true', help='Print version number and exit.')
 args = argparser.parse_args()
 
-argoptions = ('infn','outfn','extralogfn','initabun','nullabun','broad','range','epsilon')
+argoptions = ('infn','outfn','extralogfn','initabun','nullabun','broad','range','epsilon','outfmt')
 
 startTime = time()
 
@@ -95,6 +103,33 @@ def Secant(x,f,y):
         return -1
     return (x[-2]*(f[-1]-y) - x[-1]*(f[-2]-y))/(f[-1]-f[-2])
 
+# Output formatters
+
+def outputtxt(outputData,outfn):
+    with open(outfn,'w') as f:
+        f.write("{model:s} {temperature:.2f} {logg:.2f}\n".format_map(outputData[0]))
+        if 'unit55' in outputData[0]:
+            f.write(''.join(['{} = {}\n'.format(key,value) for key,value in outputData[0]['unit55']]))
+        f.write("LAMBDANM   Z.Q      Teqw  ABUN/ref  LOGABUN   wing%")
+        for row in outputData[1]:
+            if row['type'] == 'comment':
+                f.write('\n' + row['value'])
+            elif row['type'] == 'line':
+                f.write(''.join(['\n{wavelength: >8.4f}  {ion}'.format_map(line) for line in row['lines']]))
+                abuntxt = '{relabun: >8.2e}  {logabun: >7.2f}   {wingpercent: >4.0f}%'.format_map(row['abundance'])
+                f.write(' {0:8.2f}  {1}'.format(row['target'],abuntxt))
+        f.write('\n')
+
+def outputjson(outputData,outfn):
+    txt = json.dumps(outputData)
+    with open(outfn,'w') as f:
+        f.write(txt)
+
+outputformatter = {
+    'txt': outputtxt,
+    'json': outputjson,
+}
+
 # Initializing the logger
 logger = logging.getLogger('aeqw')
 logger.setLevel(logging.DEBUG)
@@ -107,6 +142,12 @@ filelog.setLevel(logging.DEBUG)
 filelog.setFormatter(logging.Formatter('%(asctime)s - %(name)-15s %(levelname)-8s: %(message)s'))
 logger.addHandler(filelog)
 filelog.doRollover()
+
+logger.info('Running aeqw version: {}'.format(version))
+
+if args.v ==True:
+    logger.debug('Exiting because only version information was asked for.')
+    sys.exit(0)
 
 readconf(CONFFN,conf)
 
@@ -187,7 +228,6 @@ try:
         # Determining the bounds of the synthetic spectrum ALAM0 and ALAM1. The multiplication by ten is for conversion from nm to A. Also writing to 19 and 55
 
         def InitParam(testLine, allLines):
-            global IS
             IS.ALAM0 = min([line.ALAM for line in testLine]) * 10 - getconf('RANGE')
             IS.ALAM1 = max([line.ALAM for line in testLine]) * 10 + getconf('RANGE')
             logger.debug(" InitParam: Setting range of synthetic spectrum: ({0:.1f}, {1:.1f})".format(IS.ALAM0,IS.ALAM1))
@@ -200,7 +240,6 @@ try:
             
         # Calculate the Equivalent width of a particular line
         def CalcEqw(testLine):
-            global IS
             if len(IS.EQW) < 2:
                 logger.warning("  CalcEqw: SYNSPEC did not generate output in fort.16")
                 return None, 0
@@ -216,7 +255,6 @@ try:
 
         # Set the abundance and run SYNSPEC and read the output
         def Run(abundances):
-            global IS
             logger.debug("  Setting abundance: {0}".format(str(abundances)))
             IS.ABUNDANCES = abundances
             IS.write56()
@@ -228,7 +266,7 @@ try:
 
         for tl in testLines:
             if type(tl) == str:
-                finAbun.append('')
+                finAbun.append({'result':'comment'})
                 continue
             testLine = tl[0]
             xeqw = tl[1]
@@ -265,15 +303,15 @@ try:
                         trials.append(trials[-1] * 10)
                         continue
                     else:
-                        finAbun.append('"No line Detected"')
+                        finAbun.append({'result':'error','message':'No line Detected.'})
                         logger.warning('No line Detected')
                         break
                 elif results[-1] * xeqw < 0:
                     logger.warning('eqw * xeqw < 0')
                     if trials[-1] > 0.1:
-                        finAbun.append('"Line Strength Insufficient with Emmision/Absorbtion mismatch"')
+                        finAbun.append({'result':'error','message':'Line Strength Insufficient with Emmision/Absorbtion mismatch'})
                     else:
-                        finAbun.append('"Emmision/Absorption mismatch"')
+                        finAbun.append({'result':'error','message':'Emmision/Absorption mismatch'})
                     break
                 else:
                     logger.debug("  Guess = {0:e}, Result = {1:f}, Target = {2:f}, Diff = {3:f}, Epsilon = {4:f}".format(trials[-1],results[-1],xeqw,xeqw-results[-1],getconf('EPSILON')))
@@ -289,31 +327,39 @@ try:
                             logger.debug(" Using secant method for new guess: {0:e}".format(trials[-1]))
                 if trials[-1] > 1.0:
                     logger.warning("Line Strength Insufficient")
-                    finAbun.append('"Line Strength Insufficient. Manual Examination suggested."')
+                    finAbun.append({'result':'error','message':'Line Strength Insufficient. Manual Examination suggested.'})
                     break
             else:
                 alleqw = CalcEqw(testLine)[1]
                 wingpercent = ((alleqw-allzero) / results[-1] - 1 )* 100
-                finAbun.append('{0: >8.2e}  {1: >7.2f}   {2: >4.0f}%'.format(trials[-1], math.log(trials[-1],10) + getconf('LOGATREF'), wingpercent))
-            logger.info('Result: %s', finAbun[-1])
+                finAbun.append({'result':'success','relabun':trials[-1],'logabun':math.log(trials[-1],10) + getconf('LOGATREF'),'wingpercent':wingpercent})
+                #finAbun.append('{0: >8.2e}  {1: >7.2f}   {2: >4.0f}%'.format(trials[-1], math.log(trials[-1],10) + getconf('LOGATREF'), wingpercent))
+            logger.info('Result: %s', (finAbun[-1]['relabun'] if finAbun[-1]['result']=='success' else finAbun[-1]['message']))
 
         # Writing the output
-        with open(getconf('OUTFN'),'w') as f:
-            logger.debug("Writing Output")
-            f.write("{2:s} {0:.2f} {1:.2f}\n".format(IS.TEMP,IS.LOGG,args.model))
-            if 'unit55' in conf:
-                for param in conf['unit55']:
-                    if hasattr(IS,param.upper()):
-                        f.write('{} = {}\n'.format(param.upper(),getattr(IS,param.upper())))
-            f.write("LAMBDANM   Z.Q      Teqw  ABUN/ref  LOGABUN   wing%")
-            for i in range(len(testLines)):
-                if type(testLines[i]) == str:
-                    f.write('\n' + testLines[i].rstrip('\n'))
-                    continue
-                for line in testLines[i][0]:
-                    f.write('\n{0: >8.4f}  {1: >2d}.{2:0>2d}'.format(line.ALAM,line.Z,line.Q))
-                f.write(' {0:8.2f}  {1}'.format(testLines[i][1],finAbun[i]))
-            f.write('\n')
+        outputData=({
+            'model': args.model,
+            'temperature': IS.TEMP,
+            'logg': IS.LOGG,
+            'version': version
+        },[])
+        if 'unit55' in conf:
+            outputData[0]['unit55'] = {param.upper():getattr(IS,param.upper()) for param in conf['unit55'] if hasattr(IS,param.upper())}
+        for i,tl in enumerate(testLines):
+            if type(tl) == str:
+                outputData[1].append({
+                    'type': 'comment',
+                    'value': tl.rstrip('\n')
+                    })
+                continue
+            outputData[1].append({
+                'type': 'line',
+                'target':tl[1],
+                'abundance': finAbun[i],
+                'lines': [{'wavelength':line.ALAM,'ion':'{0: >2d}.{1:0>2d}'.format(line.Z,line.Q)} for line in tl[0]]
+            })
+        logger.debug("Writing Output")
+        outputformatter[getconf('OUTFMT')](outputData, getconf('OUTFN'))
         logger.info("Total runs: %d", IS.runs)
 except aeqwISError as e:
     if __debug__:
