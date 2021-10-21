@@ -10,6 +10,7 @@ version='1.2.dev1'
 
 import sys
 from time import time
+from datetime import datetime
 import logging
 import logging.handlers
 import math
@@ -148,6 +149,8 @@ logger.info('Running aeqw version: {}'.format(version))
 if args.v ==True:
     logger.debug('Exiting because only version information was asked for.')
     sys.exit(0)
+
+logger.info(str(datetime.now()))
 
 readconf(CONFFN,conf)
 
