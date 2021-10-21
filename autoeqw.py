@@ -6,7 +6,7 @@
 # K.Sriram
 # Created: 20/04/2017
 
-version = "1.2.dev1"
+__version__ = "3.0.dev1"
 
 import sys
 from time import time
@@ -20,129 +20,160 @@ import json
 from isynspec import ISynspec, INLIN, aeqwISError
 
 CONFFN = "aeqw.conf"
-confgetter = {"str": "get", "float": "getfloat", "int": "getint", "bool": "getboolean"}
 
 
-conf = ConfigParser(interpolation=ExtendedInterpolation())
-conf["DEFAULT"] = {
-    "INFN": "aeqw.in",
-    "OUTFN": "aeqw.out",
-    "EXTRALOGFN": "",
-    "INITABUN": 1e-4,
-    "NULLABUN": 1e-10,
-    "LOGATREF": 11.54,
-    "BROAD": 2.0,
-    "RANGE": 5.0,
-    "EPSILON": 0.1,
-    "SEP19": False,
-    "OUTFMT": "txt",
-}
-conf["TYPES"] = {
-    "INFN": "str",
-    "OUTFN": "str",
-    "EXTRALOGFN": "str",
-    "INITABUN": "float",
-    "NULLABUN": "float",
-    "LOGATREF": "float",
-    "BROAD": "float",
-    "RANGE": "float",
-    "EPSILON": "float",
-    "SEP19": "bool",
-    "OUTFMT": "str",
-}
-conf["aeqw"] = {}
+def parse_cmd(argv):
+    argparser = ArgumentParser(
+        description="Program to automate equivalent width finding using SYNSPEC."
+    )
+    argparser.add_argument(
+        "model",
+        help="Name of the input model (such as 'hhe35lt').",
+        nargs="?",
+        default="fort",
+    )
+    argparser.add_argument("-i", "--infn", help="Custom input filename.")
+    argparser.add_argument("-o", "--outfn", help="Custom output filename.")
+    argparser.add_argument(
+        "-c",
+        action="append",
+        help="Extra configuration options files. Can be repeated.",
+    )
+    argparser.add_argument("-l", "--extralogfn", help="Extra log file.")
+    argparser.add_argument(
+        "--initabun",
+        type=float,
+        help="Assumed initial abundance for elements if not described in 'fort.56'.",
+    )
+    argparser.add_argument(
+        "--nullabun",
+        type=float,
+        help="Abundance of elements used to estimate equivalent width at zero abundance.",
+    )
+    argparser.add_argument(
+        "--logatref", type=float, help="Abundance of reference element."
+    )
+    argparser.add_argument(
+        "--broad",
+        type=float,
+        help="Half width (in Å) upto which absorption is assumed to come from the line. Set it so as to cover the entire line. If set correctly 'wing%%' should be low for isolated lines.",
+    )
+    argparser.add_argument(
+        "--range",
+        type=float,
+        help="Half width (in Å) of the generated synthetic spectrum used for analysis.",
+    )
+    argparser.add_argument(
+        "--epsilon",
+        type=float,
+        help="Accuracy to which the program will try to match the equivalent width.",
+    )
+    argparser.add_argument(
+        "--sep19",
+        action="store_true",
+        help="Whether to generate a separate 'fort.19' file for every line group.",
+    )
+    argparser.add_argument(
+        "--outfmt",
+        help="Format of the output file, Valid options are txt and json.",
+        choices=("txt", "json"),
+    )
+    argparser.add_argument(
+        "-v", "--version", action="store_true", help="Print version number and exit."
+    )
+    args = argparser.parse_args(argv)
+    return args
 
-argparser = ArgumentParser(
-    description="Program to automate equivalent width finding using SYNSPEC."
-)
-argparser.add_argument(
-    "model",
-    help="Name of the input model (such as 'hhe35lt').",
-    nargs="?",
-    default="fort",
-)
-argparser.add_argument("-i", "--infn", help="Custom input filename.")
-argparser.add_argument("-o", "--outfn", help="Custom output filename.")
-argparser.add_argument(
-    "-c", action="append", help="Extra configuration options files. Can be repeated."
-)
-argparser.add_argument("-l", "--extralogfn", help="Extra log file.")
-argparser.add_argument(
-    "--initabun",
-    type=float,
-    help="Assumed initial abundance for elements if not described in 'fort.56'.",
-)
-argparser.add_argument(
-    "--nullabun",
-    type=float,
-    help="Abundance of elements used to estimate equivalent width at zero abundance.",
-)
-argparser.add_argument("--logatref", type=float, help="Abundance of reference element.")
-argparser.add_argument(
-    "--broad",
-    type=float,
-    help="Half width (in Å) upto which absorption is assumed to come from the line. Set it so as to cover the entire line. If set correctly 'wing%%' should be low for isolated lines.",
-)
-argparser.add_argument(
-    "--range",
-    type=float,
-    help="Half width (in Å) of the generated synthetic spectrum used for analysis.",
-)
-argparser.add_argument(
-    "--epsilon",
-    type=float,
-    help="Accuracy to which the program will try to match the equivalent width.",
-)
-argparser.add_argument(
-    "--sep19",
-    action="store_true",
-    help="Whether to generate a separate 'fort.19' file for every line group.",
-)
-argparser.add_argument(
-    "--outfmt",
-    help="Format of the output file, Valid options are txt and json.",
-    choices=("txt", "json"),
-)
-argparser.add_argument("-v", action="store_true", help="Print version number and exit.")
-args = argparser.parse_args()
 
-argoptions = (
+argconf = (
     "infn",
     "outfn",
     "extralogfn",
     "initabun",
     "nullabun",
+    "logatref",
     "broad",
     "range",
     "epsilon",
     "outfmt",
 )
+argconfbool = ("sep19",)
 
-startTime = time()
 
+class Config(ConfigParser):
+    confgetter = {
+        "str": "get",
+        "float": "getfloat",
+        "int": "getint",
+        "bool": "getboolean",
+    }
 
-def readconf(conffn, conf=conf, warnifnotfound=False):
-    if conf.read(conffn) == []:
-        if warnifnotfound:
-            logger.warn(" Configuration file {0:s} not found.".format(conffn))
+    def __init__(self, defaultconf):
+        super().__init__(interpolation=ExtendedInterpolation())
+        self["DEFAULT"] = {
+            "INFN": "aeqw.in",
+            "OUTFN": "aeqw.out",
+            "EXTRALOGFN": "",
+            "INITABUN": 1e-4,
+            "NULLABUN": 1e-10,
+            "LOGATREF": 11.54,
+            "BROAD": 2.0,
+            "RANGE": 5.0,
+            "EPSILON": 0.1,
+            "SEP19": False,
+            "OUTFMT": "txt",
+        }
+        self["TYPES"] = {
+            "INFN": "str",
+            "OUTFN": "str",
+            "EXTRALOGFN": "str",
+            "INITABUN": "float",
+            "NULLABUN": "float",
+            "LOGATREF": "float",
+            "BROAD": "float",
+            "RANGE": "float",
+            "EPSILON": "float",
+            "SEP19": "bool",
+            "OUTFMT": "str",
+        }
+        self["aeqw"] = {}
+        self.sec = "aeqw"
+        self.readconf(defaultconf)
+
+    def readconf(self, conffn, warnifnotfound=False):
+        if self.read(conffn) == []:
+            if warnifnotfound:
+                logger.warn(f" Configuration file {conffn} not found.")
+            else:
+                logger.info(f" Configuration information can be added to file {conffn}")
+            return
+        logger.info(f" Reading Configuration file: {conffn}")
+
+    def addconfs(self, confs):
+        if confs is not None:
+            for c in confs:
+                self.readconf(c, True)
+
+    def getconf(self, param, sec=None):
+        if sec is None:
+            sec = self.sec
+        if param in self[sec]:
+            try:
+                return getattr(self[sec], self.confgetter[self["TYPES"][param]])(param)
+            except ValueError:
+                logger.error(f"Invalid type for parameter {param} in configuration")
+                raise
         else:
-            logger.info(
-                " Configuration information can be added to file {0:s}".format(conffn)
-            )
-        return
-    logger.info(" Reading Configuration file: {0:s}".format(conffn))
+            logger.error(f"Parameter {param} not found")
+            raise ValueError
 
-
-def getconf(param, conf=conf, sec="aeqw"):
-    if param in conf[sec]:
-        try:
-            return getattr(conf[sec], confgetter[conf["TYPES"][param]])(param)
-        except ValueError:
-            logger.error("Invalid type for parameter {} in configuration".format(param))
-            raise
-    else:
-        logger.error("Parameter {} not found".format(param))
-        raise ValueError
+    def add_args(self, args, argconf, argconfbool):
+        for c in argconf:
+            if getattr(args, c) is not None:
+                self["aeqw"][c.upper()] = getattr(args, c)
+        for c in argconfbool:
+            if getattr(args, c) == True:
+                self["aeqw"][c.upper()] = True
 
 
 def Overlap(bin, box):
@@ -153,8 +184,8 @@ def Overlap(bin, box):
     return math.sqrt((r - l) / (bin[1] - bin[0]))
 
 
-def Secant(x, f, y):
-    if abs(f[-1] - f[-2]) < getconf("EPSILON"):
+def Secant(x, f, y, epsilon):
+    if abs(f[-1] - f[-2]) < epsilon:
         return -1
     return (x[-2] * (f[-1] - y) - x[-1] * (f[-2] - y)) / (f[-1] - f[-2])
 
@@ -168,10 +199,7 @@ def outputtxt(outputData, outfn):
         if "unit55" in outputData[0]:
             f.write(
                 "".join(
-                    [
-                        "{} = {}\n".format(key, value)
-                        for key, value in outputData[0]["unit55"]
-                    ]
+                    [f"{key} = {value}\n" for key, value in outputData[0]["unit55"]]
                 )
             )
         f.write("LAMBDANM   Z.Q      Teqw  ABUN/ref  LOGABUN   wing%")
@@ -190,7 +218,7 @@ def outputtxt(outputData, outfn):
                 abuntxt = "{relabun: >8.2e}  {logabun: >7.2f}   {wingpercent: >4.0f}%".format_map(
                     row["abundance"]
                 )
-                f.write(" {0:8.2f}  {1}".format(row["target"], abuntxt))
+                f.write(f" {row['target']:8.2f}  {abuntxt}")
         f.write("\n")
 
 
@@ -205,80 +233,22 @@ outputformatter = {
     "json": outputjson,
 }
 
-# Initializing the logger
-logger = logging.getLogger("aeqw")
-logger.setLevel(logging.DEBUG)
-console = logging.StreamHandler()
-console.setLevel(logging.INFO)
-console.setFormatter(logging.Formatter("%(levelname)-8s: %(message)s"))
-logger.addHandler(console)
-filelog = logging.handlers.RotatingFileHandler(
-    "aeqw.log", "a", maxBytes=0, backupCount=9
-)
-filelog.setLevel(logging.DEBUG)
-filelog.setFormatter(
-    logging.Formatter("%(asctime)s - %(name)-15s %(levelname)-8s: %(message)s")
-)
-logger.addHandler(filelog)
-filelog.doRollover()
 
-logger.info("Running aeqw version: {}".format(version))
-
-if args.v == True:
-    logger.debug("Exiting because only version information was asked for.")
-    sys.exit(0)
-
-logger.info(str(datetime.now()))
-
-readconf(CONFFN, conf)
-
-if args.c is not None:
-    for c in args.c:
-        readconf(c, conf, True)
-
-extralog = (
-    args.extralogfn
-    if args.extralogfn is not None
-    else (getconf("EXTRALOGFN") if getconf("EXTRALOGFN") != "" else None)
-)
-
-if extralog is not None:
-    xtrafilelog = logging.FileHandler(extralog)
-    xtrafilelog.setLevel(logging.DEBUG)
-    xtrafilelog.setFormatter(
-        logging.Formatter("%(asctime)s - %(name)-15s %(levelname)-8s: %(message)s")
-    )
-    logger.addHandler(xtrafilelog)
-
-for option in argoptions:
-    if getattr(args, option) is not None:
-        conf["aeqw"][option.upper()] = getattr(args, option)
-if args.sep19 == True:
-    conf["aeqw"]["SEP19"] = True
-
-logger.info("Running program: Automatic Equation width solver.")
-logger.info("Model: {}".format(args.model))
-logger.debug("Initialization")
-
-logger.debug(" Parameters:")
-for param in conf["aeqw"].keys():
-    logger.debug("  {0:s} : {1:s}".format(param, str(getconf(param))))
-
-try:
-    with ISynspec(args.model) as IS:
+def aeqw(conf, model, outputformatter):
+    with ISynspec(model) as synspec_interface:
 
         if "unit55" in conf:
             for param in conf["unit55"]:
-                if hasattr(IS, param.upper()):
+                if hasattr(synspec_interface, param.upper()):
                     setattr(
-                        IS,
+                        synspec_interface,
                         param.upper(),
-                        type(getattr(IS, param.upper()))(conf["unit55"][param]),
+                        type(getattr(synspec_interface, param.upper()))(
+                            conf["unit55"][param]
+                        ),
                     )
                     logger.info(
-                        "Setting unit 55 parameter {} to {}".format(
-                            param.upper(), getattr(IS, param.upper())
-                        )
+                        f"Setting unit 55 parameter {param.upper()} to {getattr(synspec_interface, param.upper())}"
                     )
 
         allLines = (
@@ -294,9 +264,9 @@ try:
         lineNo = 1
 
         logger.debug("Reading input file.")
-        with open(getconf("INFN")) as f:
+        with open(conf.getconf("INFN")) as f:
             for line in f:
-                logger.debug(" Processing line: {0}".format(line.strip()))
+                logger.debug(f" Processing line: {line.strip()}")
                 lineNo += 1
                 if line[0] == "#":  # Unprinted Comment
                     continue
@@ -314,63 +284,58 @@ try:
                             testLines.append((tempTL, float(inline.remainder)))
                             tempTL = []
                 except Exception:
-                    logger.error(
-                        "Error while processing line {0:d}\n{1}\n".format(lineNo, line)
-                    )
+                    logger.error(f"Error while processing line {lineNo:d}\n{line}\n")
                     raise
 
-        INCONSISTENT = False
         allLines.sort(key=lambda x: x.ALAM)
-        IS.LINELIST = allLines
-        IS.write19()
+        synspec_interface.LINELIST = allLines
+        synspec_interface.write19()
         # Determining the bounds of the synthetic spectrum ALAM0 and ALAM1. The multiplication by ten is for conversion from nm to A. Also writing to 19 and 55
 
         def InitParam(testLine, allLines):
-            IS.ALAM0 = min([line.ALAM for line in testLine]) * 10 - getconf("RANGE")
-            IS.ALAM1 = max([line.ALAM for line in testLine]) * 10 + getconf("RANGE")
+            synspec_interface.ALAM0 = min(
+                [line.ALAM for line in testLine]
+            ) * 10 - conf.getconf("RANGE")
+            synspec_interface.ALAM1 = max(
+                [line.ALAM for line in testLine]
+            ) * 10 + conf.getconf("RANGE")
             logger.debug(
-                " InitParam: Setting range of synthetic spectrum: ({0:.1f}, {1:.1f})".format(
-                    IS.ALAM0, IS.ALAM1
-                )
+                f" InitParam: Setting range of synthetic spectrum: ({synspec_interface.ALAM0:.1f}, {synspec_interface.ALAM1:.1f})"
             )
 
-            IS.write55()
+            synspec_interface.write55()
 
-            if getconf("SEP19") == True:
-                IS.LINELIST = testLine
-                IS.write19()
+            if conf.getconf("SEP19") == True:
+                synspec_interface.LINELIST = testLine
+                synspec_interface.write19()
 
         # Calculate the Equivalent width of a particular line
         def CalcEqw(testLine):
-            if len(IS.EQW) < 2:
+            if len(synspec_interface.EQW) < 2:
                 logger.warning("  CalcEqw: SYNSPEC did not generate output in fort.16")
                 return None, 0
             box = (
-                min([line.ALAM for line in testLine]) * 10 - getconf("BROAD"),
-                max([line.ALAM for line in testLine]) * 10 + getconf("BROAD"),
+                min([line.ALAM for line in testLine]) * 10 - conf.getconf("BROAD"),
+                max([line.ALAM for line in testLine]) * 10 + conf.getconf("BROAD"),
             )
             logger.debug(
-                "  CalcEqw: Calculating Equivalent width; including bins in {0}.".format(
-                    str(box)
-                )
+                f"  CalcEqw: Calculating Equivalent width; including bins in {box}."
             )
             total = 0
             alltotal = 0
-            for bin in IS.EQW:
+            for bin in synspec_interface.EQW:
                 total += bin[1] * Overlap(bin[0], box)
                 alltotal += bin[1]
-            logger.debug(
-                "  CalcEqw: eqw = {0:f}, alleqw = {1:f}".format(total, alltotal)
-            )
+            logger.debug(f"  CalcEqw: eqw = {total:f}, alleqw = {alltotal:f}")
             return total, alltotal
 
         # Set the abundance and run SYNSPEC and read the output
         def Run(abundances):
-            logger.debug("  Setting abundance: {0}".format(str(abundances)))
-            IS.ABUNDANCES = abundances
-            IS.write56()
-            IS.run()
-            IS.read16()
+            logger.debug(f"  Setting abundance: {abundances}")
+            synspec_interface.ABUNDANCES = abundances
+            synspec_interface.write56()
+            synspec_interface.run()
+            synspec_interface.read16()
 
         finAbun = []
         # Iterating over all testLines
@@ -391,29 +356,27 @@ try:
             InitParam(testLine, allLines)
             # Setting Zero
             logger.debug(" Performing zero check")
-            abun = getconf("NULLABUN")
+            abun = conf.getconf("NULLABUN")
             Run([(Z, abun)])
             zero, allzero = CalcEqw(testLine)
             while zero is None:  # If the program didn't compute the bins
-                if IS.RELOP > 1e-12:
-                    IS.RELOP /= 10
+                if synspec_interface.RELOP > 1e-12:
+                    synspec_interface.RELOP /= 10
                     logger.debug(
-                        " > Setting RELOP parameter to {0:.1e}".format(IS.RELOP)
+                        f" > Setting RELOP parameter to {synspec_interface.RELOP:.1e}"
                     )
-                    IS.write55()
+                    synspec_interface.write55()
                 Run([(Z, abun)])
                 zero, allzero = CalcEqw(testLine)
 
-            logger.debug(" > Zero = {0:f}, allZero = {1:f}".format(zero, allzero))
+            logger.debug(f" > Zero = {zero:f}, allZero = {allzero:f}")
 
             # Finding the abundance that gives reasonable eqw
-            trials = [IS.INITABUNZWISE.get(Z, getconf("INITABUN"))]
+            trials = [synspec_interface.INITABUNZWISE.get(Z, conf.getconf("INITABUN"))]
             results = []
-            while not results or abs(results[-1] - xeqw) > getconf("EPSILON"):
+            while not results or abs(results[-1] - xeqw) > conf.getconf("EPSILON"):
                 logger.debug(
-                    " Running for abundance: {0:e}, target width: {1:f}".format(
-                        trials[-1], xeqw
-                    )
+                    f" Running for abundance: {trials[-1]:e}, target width: {xeqw:f}"
                 )
                 Run([(Z, trials[-1])])
                 results.append(CalcEqw(testLine)[0] - zero)
@@ -451,13 +414,7 @@ try:
                     break
                 else:
                     logger.debug(
-                        "  Guess = {0:e}, Result = {1:f}, Target = {2:f}, Diff = {3:f}, Epsilon = {4:f}".format(
-                            trials[-1],
-                            results[-1],
-                            xeqw,
-                            xeqw - results[-1],
-                            getconf("EPSILON"),
-                        )
+                        f"  Guess = {trials[-1]:e}, Result = {results[-1]:f}, Target = {xeqw:f}, Diff = {xeqw - results[-1]:f}, Epsilon = {conf.getconf('EPSILON'):f}"
                     )
                     if len(results) < 2 or all(
                         [
@@ -467,24 +424,20 @@ try:
                     ):  # Checking if last two runs gave a valid result
                         trials.append(xeqw * trials[-1] / results[-1])
                         logger.debug(
-                            " Using linear approximation for new guess: {0:e}".format(
-                                trials[-1]
-                            )
+                            f" Using linear approximation for new guess: {trials[-1]:e}"
                         )
                     else:
-                        trials.append(Secant(trials, results, xeqw))
+                        trials.append(
+                            Secant(trials, results, xeqw, conf.getconf("EPSILON"))
+                        )
                         if trials[-1] < 0:
                             trials[-1] = xeqw * trials[-2] / results[-1]
                             logger.debug(
-                                " Using linear approximation for new guess: {0:e}".format(
-                                    trials[-1]
-                                )
+                                f" Using linear approximation for new guess: {trials[-1]:e}"
                             )
                         else:
                             logger.debug(
-                                " Using secant method for new guess: {0:e}".format(
-                                    trials[-1]
-                                )
+                                f" Using secant method for new guess: {trials[-1]:e}"
                             )
                 if trials[-1] > 1.0:
                     logger.warning("Line Strength Insufficient")
@@ -502,35 +455,30 @@ try:
                     {
                         "result": "success",
                         "relabun": trials[-1],
-                        "logabun": math.log(trials[-1], 10) + getconf("LOGATREF"),
+                        "logabun": math.log(trials[-1], 10) + conf.getconf("LOGATREF"),
                         "wingpercent": wingpercent,
                     }
                 )
-                # finAbun.append('{0: >8.2e}  {1: >7.2f}   {2: >4.0f}%'.format(trials[-1], math.log(trials[-1],10) + getconf('LOGATREF'), wingpercent))
+                # finAbun.append(f"{trials[-1]: >8.2e}  {math.log(trials[-1],10) + conf.getconf('LOGATREF'): >7.2f}   {wingpercent: >4.0f}%")
             logger.info(
-                "Result: %s",
-                (
-                    finAbun[-1]["relabun"]
-                    if finAbun[-1]["result"] == "success"
-                    else finAbun[-1]["message"]
-                ),
+                f"Result: {finAbun[-1]['relabun'] if finAbun[-1]['result'] == 'success' else finAbun[-1]['message']}"
             )
 
         # Writing the output
         outputData = (
             {
-                "model": args.model,
-                "temperature": IS.TEMP,
-                "logg": IS.LOGG,
-                "version": version,
+                "model": model,
+                "temperature": synspec_interface.TEMP,
+                "logg": synspec_interface.LOGG,
+                "version": __version__,
             },
             [],
         )
         if "unit55" in conf:
             outputData[0]["unit55"] = {
-                param.upper(): getattr(IS, param.upper())
+                param.upper(): getattr(synspec_interface, param.upper())
                 for param in conf["unit55"]
-                if hasattr(IS, param.upper())
+                if hasattr(synspec_interface, param.upper())
             }
         for i, tl in enumerate(testLines):
             if type(tl) == str:
@@ -544,18 +492,84 @@ try:
                     "lines": [
                         {
                             "wavelength": line.ALAM,
-                            "ion": "{0: >2d}.{1:0>2d}".format(line.Z, line.Q),
+                            "ion": f"{line.Z: >2d}.{line.Q:0>2d}",
                         }
                         for line in tl[0]
                     ],
                 }
             )
         logger.debug("Writing Output")
-        outputformatter[getconf("OUTFMT")](outputData, getconf("OUTFN"))
-        logger.info("Total runs: %d", IS.runs)
-except aeqwISError as e:
-    if __debug__:
-        raise
+        outputformatter(outputData, conf.getconf("OUTFN"))
+        logger.info("Total runs: %d", synspec_interface.runs)
 
 
-logger.info("Runtime: {0:.3f}".format(time() - startTime))
+def init_logger():
+    global logger
+    logger = logging.getLogger("aeqw")
+    logger.setLevel(logging.DEBUG)
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+    console.setFormatter(logging.Formatter("%(levelname)-8s: %(message)s"))
+    logger.addHandler(console)
+    filelog = logging.handlers.RotatingFileHandler(
+        "aeqw.log", "a", maxBytes=0, backupCount=9
+    )
+    filelog.setLevel(logging.DEBUG)
+    filelog.setFormatter(
+        logging.Formatter("%(asctime)s - %(name)-15s %(levelname)-8s: %(message)s")
+    )
+    logger.addHandler(filelog)
+    filelog.doRollover()
+
+
+def add_extralog(args, conf):
+    extralog = (
+        args.extralogfn
+        if args.extralogfn is not None
+        else (conf.getconf("EXTRALOGFN") if conf.getconf("EXTRALOGFN") != "" else None)
+    )
+
+    if extralog is not None:
+        xtrafilelog = logging.FileHandler(extralog)
+        xtrafilelog.setLevel(logging.DEBUG)
+        xtrafilelog.setFormatter(
+            logging.Formatter("%(asctime)s - %(name)-15s %(levelname)-8s: %(message)s")
+        )
+        logger.addHandler(xtrafilelog)
+
+
+def main(argv):
+    startTime = time()
+    init_logger()
+    logger.info(
+        f"Running program: Automatic Equation width solver Version: {__version__}"
+    )
+    logger.info(str(datetime.now()))
+
+    args = parse_cmd(argv)
+    model = args.model
+
+    if args.version == True:
+        logger.debug("Exiting because only version information was asked for.")
+        sys.exit(0)
+
+    conf = Config(CONFFN)
+
+    add_extralog(args, conf)
+
+    conf.add_args(args, argconf, argconfbool)
+
+    logger.info(f"Model: {model}")
+    logger.debug("Initialization")
+
+    logger.debug(" Parameters:")
+    for param in conf["aeqw"].keys():
+        logger.debug(f"  {param} : {conf.getconf(param)}")
+
+    aeqw(conf, model, outputformatter[conf.getconf("OUTFMT")])
+
+    logger.info(f"Runtime: {time() - startTime:.3f}")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
