@@ -6,7 +6,6 @@
 # K.Sriram
 # Created: 20/04/2017
 
-__version__ = "3.0.dev1"
 
 import sys
 from time import time
@@ -17,12 +16,13 @@ import math
 from configparser import ConfigParser, ExtendedInterpolation
 from argparse import ArgumentParser
 import json
-from isynspec import ISynspec, INLIN, aeqwISError
+from aeqw.isynspec import ISynspec, INLIN
+from aeqw import __version__
 
 CONFFN = "aeqw.conf"
 
 
-def parse_cmd(argv):
+def parse_cmd(argv=None):
     argparser = ArgumentParser(
         description="Program to automate equivalent width finding using SYNSPEC."
     )
@@ -538,7 +538,7 @@ def add_extralog(args, conf):
         logger.addHandler(xtrafilelog)
 
 
-def main(argv):
+def main(argv=None):
     startTime = time()
     init_logger()
     logger.info(
@@ -572,4 +572,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()
