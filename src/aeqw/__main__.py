@@ -79,7 +79,7 @@ def parse_cmd(argv=None):
         choices=("txt", "json"),
     )
     argparser.add_argument(
-        "-v", "--version", action="store_true", help="Print version number and exit."
+        "-V", "--version", action="version", version=f"%(prog)s {__version__}"
     )
     args = argparser.parse_args(argv)
     return args
@@ -228,10 +228,7 @@ def outputjson(outputData, outfn):
         f.write(txt)
 
 
-outputformatter = {
-    "txt": outputtxt,
-    "json": outputjson,
-}
+outputformatter = {"txt": outputtxt, "json": outputjson}
 
 
 def aeqw(conf, model, outputformatter):
@@ -490,10 +487,7 @@ def aeqw(conf, model, outputformatter):
                     "target": tl[1],
                     "abundance": finAbun[i],
                     "lines": [
-                        {
-                            "wavelength": line.ALAM,
-                            "ion": f"{line.Z: >2d}.{line.Q:0>2d}",
-                        }
+                        {"wavelength": line.ALAM, "ion": f"{line.Z: >2d}.{line.Q:0>2d}"}
                         for line in tl[0]
                     ],
                 }
@@ -540,18 +534,15 @@ def add_extralog(args, conf):
 
 def main(argv=None):
     startTime = time()
+
+    args = parse_cmd(argv)
+    model = args.model
+
     init_logger()
     logger.info(
         f"Running program: Automatic Equation width solver Version: {__version__}"
     )
     logger.info(str(datetime.now()))
-
-    args = parse_cmd(argv)
-    model = args.model
-
-    if args.version == True:
-        logger.debug("Exiting because only version information was asked for.")
-        sys.exit(0)
 
     conf = Config(CONFFN)
 
