@@ -8,7 +8,7 @@
 
 
 import sys
-from time import time
+import time
 from datetime import datetime
 import logging
 import logging.handlers
@@ -533,7 +533,7 @@ def add_extralog(args, conf):
 
 
 def main(argv=None):
-    startTime = time()
+    startTime = time.perf_counter()
 
     args = parse_cmd(argv)
     model = args.model
@@ -559,7 +559,7 @@ def main(argv=None):
 
     aeqw(conf, model, outputformatter[conf.getconf("OUTFMT")])
 
-    logger.info(f"Runtime: {time() - startTime:.3f}")
+    logger.info(f"Runtime: {time.perf_counter() - startTime:.3f}")
 
 
 if __name__ == "__main__":
